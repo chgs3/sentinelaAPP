@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  RefreshControl,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,17 +17,26 @@ import { useFocusEffect, router } from 'expo-router';
 import { api } from '../services/api';
 import type { MonthlySummary, ParseMessageResponse, Transaction } from '../types';
 
+type TransactionTypeFilter = 'all' | 'expense' | 'income';
+
 export default function HomeScreen() {
   const [summary, setSummary] = useState<MonthlySummary | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [message, setMessage] = useState('');
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  async function loadData() {
+  const [typeFilter, setTypeFilter] = useState<TransactionTypeFilter>('all');
+  const [categoryFilter, setCategoryFilter] = useState('Todas');
+
+  async function loadData(showInitialLoading = false) {
     try {
-      setLoading(true);
+      if (showInitialLoading) {
+        setLoading(true);
+      }
 
       const [summaryResponse, transactionsResponse] = await Promise.all([
         api.get<MonthlySummary>('/summary/monthly'),
@@ -38,7 +49,18 @@ export default function HomeScreen() {
       console.error(error);
       Alert.alert('Erro', 'Não foi possível carregar os dados da API.');
     } finally {
-      setLoading(false);
+      if (showInitialLoading) {
+        setLoading(false);
+      }
+    }
+  }
+
+  async function handleRefresh() {
+    try {
+      setRefreshing(true);
+      await loadData(false);
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -56,7 +78,7 @@ export default function HomeScreen() {
       });
 
       setMessage('');
-      await loadData();
+      await loadData(false);
 
       Alert.alert('Sucesso', 'Transação registrada com sucesso.');
     } catch (error: any) {
@@ -77,7 +99,7 @@ export default function HomeScreen() {
       setDeletingId(id);
 
       await api.delete(`/transactions/${id}`);
-      await loadData();
+      await loadData(false);
 
       Alert.alert('Sucesso', 'Transação excluída com sucesso.');
     } catch (error) {
@@ -103,6 +125,13 @@ export default function HomeScreen() {
     );
   }
 
+  function goToTransactionDetails(id: number) {
+    router.push({
+      pathname: '/transaction/[id]' as const,
+      params: { id: String(id) },
+    });
+  }
+
   function goToEditTransaction(id: number) {
     router.push({
       pathname: '/edit/[id]' as const,
@@ -111,12 +140,12 @@ export default function HomeScreen() {
   }
 
   useEffect(() => {
-    loadData();
+    loadData(true);
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadData();
+      loadData(false);
     }, [])
   );
 
@@ -127,11 +156,49 @@ export default function HomeScreen() {
     });
   }
 
+  const categories = useMemo(() => {
+    const uniqueCategories = Array.from(
+      new Set(transactions.map((transaction) => transaction.category))
+    ).sort();
+
+    return ['Todas', ...uniqueCategories];
+  }, [transactions]);
+
+  const filteredTransactions = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    return transactions.filter((transaction) => {
+      const matchesType =
+        typeFilter === 'all' ? true : transaction.type === typeFilter;
+
+      const matchesCategory =
+        categoryFilter === 'Todas'
+          ? true
+          : transaction.category === categoryFilter;
+
+      const searchableContent = [
+        transaction.description,
+        transaction.category,
+        transaction.paymentMethod ?? '',
+        transaction.accountOrCard ?? '',
+      ]
+        .join(' ')
+        .toLowerCase();
+
+      const matchesSearch =
+        normalizedSearch.length === 0
+          ? true
+          : searchableContent.includes(normalizedSearch);
+
+      return matchesType && matchesCategory && matchesSearch;
+    });
+  }, [transactions, typeFilter, categoryFilter, search]);
+
   function renderTransaction({ item }: { item: Transaction }) {
     return (
       <TouchableOpacity
         style={styles.transactionCard}
-        onPress={() => goToEditTransaction(item.id)}
+        onPress={() => goToTransactionDetails(item.id)}
       >
         <View style={styles.transactionHeader}>
           <Text style={styles.transactionTitle}>{item.description}</Text>
@@ -189,53 +256,158 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Finance Agent</Text>
-      <Text style={styles.subtitle}>Controle de gastos por mensagem</Text>
-
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryTitle}>Resumo do mês</Text>
-        <Text style={styles.summaryItem}>
-          Receitas: {formatCurrency(summary?.totalIncomes ?? 0)}
-        </Text>
-        <Text style={styles.summaryItem}>
-          Despesas: {formatCurrency(summary?.totalExpenses ?? 0)}
-        </Text>
-        <Text style={styles.summaryItem}>
-          Saldo: {formatCurrency(summary?.balance ?? 0)}
-        </Text>
-        <Text style={styles.summaryItem}>
-          Transações: {summary?.totalTransactions ?? 0}
-        </Text>
-      </View>
-
-      <View style={styles.formCard}>
-        <Text style={styles.formTitle}>Registrar por mensagem</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ex.: Gastei 32,50 com uber"
-          value={message}
-          onChangeText={setMessage}
-        />
-        <TouchableOpacity
-          style={[styles.button, submitting && styles.buttonDisabled]}
-          onPress={handleSubmitMessage}
-          disabled={submitting}
-        >
-          <Text style={styles.buttonText}>
-            {submitting ? 'Enviando...' : 'Registrar'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.listTitle}>Últimas transações</Text>
-
       <FlatList
-        data={transactions}
+        data={filteredTransactions}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderTransaction}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
         contentContainerStyle={styles.listContent}
+        ListHeaderComponent={
+          <>
+            <Text style={styles.title}>Finance Agent</Text>
+            <Text style={styles.subtitle}>Controle de gastos por mensagem</Text>
+
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryTitle}>Resumo do mês</Text>
+              <Text style={styles.summaryItem}>
+                Receitas: {formatCurrency(summary?.totalIncomes ?? 0)}
+              </Text>
+              <Text style={styles.summaryItem}>
+                Despesas: {formatCurrency(summary?.totalExpenses ?? 0)}
+              </Text>
+              <Text style={styles.summaryItem}>
+                Saldo: {formatCurrency(summary?.balance ?? 0)}
+              </Text>
+              <Text style={styles.summaryItem}>
+                Transações: {summary?.totalTransactions ?? 0}
+              </Text>
+            </View>
+
+            <View style={styles.formCard}>
+              <Text style={styles.formTitle}>Registrar por mensagem</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex.: Gastei 32,50 com uber"
+                value={message}
+                onChangeText={setMessage}
+              />
+              <TouchableOpacity
+                style={[styles.button, submitting && styles.buttonDisabled]}
+                onPress={handleSubmitMessage}
+                disabled={submitting}
+              >
+                <Text style={styles.buttonText}>
+                  {submitting ? 'Enviando...' : 'Registrar'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.filtersCard}>
+              <Text style={styles.filtersTitle}>Filtros</Text>
+
+              <Text style={styles.filterLabel}>Busca</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Buscar por descrição, categoria, pix, nubank..."
+                value={search}
+                onChangeText={setSearch}
+              />
+
+              <Text style={styles.filterLabel}>Tipo</Text>
+              <View style={styles.filterRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.filterButton,
+                    typeFilter === 'all' && styles.filterButtonActive,
+                  ]}
+                  onPress={() => setTypeFilter('all')}
+                >
+                  <Text
+                    style={[
+                      styles.filterButtonText,
+                      typeFilter === 'all' && styles.filterButtonTextActive,
+                    ]}
+                  >
+                    Todos
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.filterButton,
+                    typeFilter === 'expense' && styles.filterButtonActive,
+                  ]}
+                  onPress={() => setTypeFilter('expense')}
+                >
+                  <Text
+                    style={[
+                      styles.filterButtonText,
+                      typeFilter === 'expense' && styles.filterButtonTextActive,
+                    ]}
+                  >
+                    Despesas
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.filterButton,
+                    typeFilter === 'income' && styles.filterButtonActive,
+                  ]}
+                  onPress={() => setTypeFilter('income')}
+                >
+                  <Text
+                    style={[
+                      styles.filterButtonText,
+                      typeFilter === 'income' && styles.filterButtonTextActive,
+                    ]}
+                  >
+                    Receitas
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.filterLabel}>Categoria</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoriesRow}
+              >
+                {categories.map((category) => {
+                  const isActive = categoryFilter === category;
+
+                  return (
+                    <TouchableOpacity
+                      key={category}
+                      style={[
+                        styles.categoryChip,
+                        isActive && styles.categoryChipActive,
+                      ]}
+                      onPress={() => setCategoryFilter(category)}
+                    >
+                      <Text
+                        style={[
+                          styles.categoryChipText,
+                          isActive && styles.categoryChipTextActive,
+                        ]}
+                      >
+                        {category}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <Text style={styles.listTitle}>Transações filtradas</Text>
+          </>
+        }
         ListEmptyComponent={
-          <Text style={styles.emptyText}>Nenhuma transação encontrada.</Text>
+          <Text style={styles.emptyText}>
+            Nenhuma transação encontrada para os filtros selecionados.
+          </Text>
         }
       />
     </SafeAreaView>
@@ -245,7 +417,6 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
     backgroundColor: '#F5F7FB',
   },
   centered: {
@@ -257,6 +428,10 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
+  },
+  listContent: {
+    padding: 16,
+    paddingBottom: 24,
   },
   title: {
     fontSize: 28,
@@ -321,14 +496,73 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
-  listTitle: {
+  filtersCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  filtersTitle: {
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 12,
     color: '#111827',
   },
-  listContent: {
-    paddingBottom: 24,
+  filterLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  filterButton: {
+    backgroundColor: '#E5E7EB',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  filterButtonActive: {
+    backgroundColor: '#2563EB',
+  },
+  filterButtonText: {
+    color: '#111827',
+    fontWeight: '600',
+  },
+  filterButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  categoriesRow: {
+    paddingVertical: 4,
+    gap: 8,
+  },
+  categoryChip: {
+    backgroundColor: '#E5E7EB',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginRight: 8,
+  },
+  categoryChipActive: {
+    backgroundColor: '#111827',
+  },
+  categoryChipText: {
+    color: '#111827',
+    fontWeight: '600',
+  },
+  categoryChipTextActive: {
+    color: '#FFFFFF',
+  },
+  listTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+    color: '#111827',
   },
   transactionCard: {
     backgroundColor: '#FFFFFF',

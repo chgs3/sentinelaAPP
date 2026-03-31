@@ -79,7 +79,46 @@ class ParseTransactionMessageService {
       return yesterday;
     }
 
-    return now;
+    const weekDays: Record<string, number> = {
+      domingo: 0,
+      segunda: 1,
+      'segunda-feira': 1,
+      terca: 2,
+      'terça': 2,
+      'terça-feira': 2,
+      quarta: 3,
+      'quarta-feira': 3,
+      quinta: 4,
+      'quinta-feira': 4,
+      sexta: 5,
+      'sexta-feira': 5,
+      sabado: 6,
+      sábado: 6,
+    };
+
+    const matchedDay = Object.keys(weekDays).find((day) => message.includes(day));
+
+    if (!matchedDay) {
+      return now;
+    }
+
+    const targetDay = weekDays[matchedDay];
+    const currentDay = now.getDay();
+
+    let diff = currentDay - targetDay;
+
+    if (diff < 0) {
+      diff += 7;
+    }
+
+    if (diff === 0) {
+      diff = 7;
+    }
+
+    const targetDate = new Date(now);
+    targetDate.setDate(now.getDate() - diff);
+
+    return targetDate;
   }
 
   private extractDescription(message: string): string {
@@ -87,7 +126,10 @@ class ParseTransactionMessageService {
       .replace(/gastei|paguei|comprei|recebi|ganhei|entrada|entrou/gi, '')
       .replace(/(\d+[.,]?\d{0,2})/g, '')
       .replace(/\b(com|de|do|da|no|na|em|via)\b/gi, '')
-      .replace(/\b(hoje|ontem)\b/gi, '')
+      .replace(
+        /\b(hoje|ontem|domingo|segunda|segunda-feira|terca|terça|terça-feira|quarta|quarta-feira|quinta|quinta-feira|sexta|sexta-feira|sabado|sábado)\b/gi,
+        ''
+      )
       .replace(/\b(crédito|credito|débito|debito|pix|dinheiro)\b/gi, '')
       .replace(
         /\b(nubank|inter|picpay|caixa|itau|itaú|bradesco|santander|bb|banco do brasil)\b/gi,
