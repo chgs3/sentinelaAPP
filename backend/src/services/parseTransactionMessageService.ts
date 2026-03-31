@@ -21,6 +21,7 @@ class ParseTransactionMessageService {
     const transactionAt = this.detectTransactionDate(normalizedMessage);
     const paymentMethod = this.detectPaymentMethod(normalizedMessage);
     const accountOrCard = this.detectAccountOrCard(normalizedMessage);
+
     const extractedDescription = this.extractDescription(normalizedMessage);
     const description = this.buildFallbackDescription(
       extractedDescription,
@@ -78,7 +79,46 @@ class ParseTransactionMessageService {
       return yesterday;
     }
 
-    return now;
+    const weekDays: Record<string, number> = {
+      domingo: 0,
+      segunda: 1,
+      'segunda-feira': 1,
+      terca: 2,
+      'terça': 2,
+      'terça-feira': 2,
+      quarta: 3,
+      'quarta-feira': 3,
+      quinta: 4,
+      'quinta-feira': 4,
+      sexta: 5,
+      'sexta-feira': 5,
+      sabado: 6,
+      sábado: 6,
+    };
+
+    const matchedDay = Object.keys(weekDays).find((day) => message.includes(day));
+
+    if (!matchedDay) {
+      return now;
+    }
+
+    const targetDay = weekDays[matchedDay];
+    const currentDay = now.getDay();
+
+    let diff = currentDay - targetDay;
+
+    if (diff < 0) {
+      diff += 7;
+    }
+
+    if (diff === 0) {
+      diff = 7;
+    }
+
+    const targetDate = new Date(now);
+    targetDate.setDate(now.getDate() - diff);
+
+    return targetDate;
   }
 
   private extractDescription(message: string): string {
@@ -86,31 +126,50 @@ class ParseTransactionMessageService {
       .replace(/gastei|paguei|comprei|recebi|ganhei|entrada|entrou/gi, '')
       .replace(/(\d+[.,]?\d{0,2})/g, '')
       .replace(/\b(com|de|do|da|no|na|em|via)\b/gi, '')
-      .replace(/\b(hoje|ontem)\b/gi, '')
+      .replace(
+        /\b(hoje|ontem|domingo|segunda|segunda-feira|terca|terça|terça-feira|quarta|quarta-feira|quinta|quinta-feira|sexta|sexta-feira|sabado|sábado)\b/gi,
+        ''
+      )
       .replace(/\b(crédito|credito|débito|debito|pix|dinheiro)\b/gi, '')
-      .replace(/\b(nubank|inter|picpay|caixa|itau|itaú|bradesco|santander|bb|banco do brasil)\b/gi, '')
+      .replace(
+        /\b(nubank|inter|picpay|caixa|itau|itaú|bradesco|santander|bb|banco do brasil)\b/gi,
+        ''
+      )
       .replace(/\s+/g, ' ')
       .trim();
 
     return cleanedMessage;
   }
 
+  private buildFallbackDescription(
+    description: string,
+    type: TransactionType,
+    paymentMethod: string | null,
+    accountOrCard: string | null
+  ): string {
+    if (description.trim()) {
+      return description;
+    }
+
+    if (type === 'income') {
+      if (paymentMethod === 'pix') return 'entrada pix';
+      if (accountOrCard) return `entrada ${accountOrCard}`;
+      return 'entrada';
+    }
+
+    if (paymentMethod === 'pix') return 'gasto pix';
+    if (accountOrCard) return `gasto ${accountOrCard}`;
+    return 'gasto';
+  }
+
   private detectCategory(description: string): string {
     const rules: Record<string, string[]> = {
       Transporte: ['uber', '99', 'taxi', 'gasolina', 'ônibus', 'onibus', 'metrô', 'metro'],
-
-      Alimentação: ['ifood', 'comida', 'lanche', 'restaurante', 'mercado', 'café', 'cafe', 'supermercado', 'padaria', 'bar', 'lanchonete', 'delivery', 'mercadinho',
-        'carnes', 'hortifruti', 'frutas', 'verduras', 'bebidas', 'doces', 'salgados', 'congelados', 'enlatados', 'cereais', 'laticínios', 'pães', 'massas', 'arroz', 'feijão'
-      ],
-
+      Alimentação: ['ifood', 'comida', 'lanche', 'restaurante', 'mercado', 'café', 'cafe'],
       Moradia: ['aluguel', 'energia', 'água', 'agua', 'internet', 'condomínio', 'condominio'],
-
       Saúde: ['farmácia', 'farmacia', 'médico', 'medico', 'consulta', 'remédio', 'remedio'],
-
       Lazer: ['cinema', 'netflix', 'spotify', 'viagem', 'bar', 'show'],
-
-      Trabalho: ['freela', 'freelance', 'curso', 'faculdade', 'livro', 'software', 'ferramenta',
-        'projeto', 'trabalho', 'salário', 'salario', 'serviço', 'servico', 'cliente', 'contrato'],
+      Trabalho: ['freela', 'freelance', 'curso', 'faculdade', 'livro', 'software', 'ferramenta', 'projeto'],
     };
 
     for (const [category, keywords] of Object.entries(rules)) {
@@ -168,27 +227,6 @@ class ParseTransactionMessageService {
     }
 
     return foundInstitution;
-  }
-
-  private buildFallbackDescription(
-    description: string,
-    type: TransactionType,
-    paymentMethod: string | null,
-    accountOrCard: string | null
-  ): string {
-    if (description.trim()) {
-      return description;
-    }
-
-    if (type === 'income') {
-      if (paymentMethod === 'pix') return 'entrada pix';
-      if (accountOrCard) return `entrada ${accountOrCard}`;
-      return 'entrada';
-    }
-
-    if (paymentMethod === 'pix') return 'gasto pix';
-    if (accountOrCard) return `gasto ${accountOrCard}`;
-    return 'gasto';
   }
 }
 
