@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useFocusEffect, router } from 'expo-router';
 
 import { api } from '../services/api';
 import type { MonthlySummary, ParseMessageResponse, Transaction } from '../types';
@@ -20,6 +21,7 @@ export default function HomeScreen() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   async function loadData() {
     try {
@@ -65,9 +67,53 @@ export default function HomeScreen() {
     }
   }
 
+  async function handleDeleteTransaction(id: number) {
+    try {
+      setDeletingId(id);
+
+      await api.delete(`/transactions/${id}`);
+      await loadData();
+
+      Alert.alert('Sucesso', 'Transação excluída com sucesso.');
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Erro', 'Não foi possível excluir a transação.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  function confirmDelete(id: number) {
+    Alert.alert(
+      'Excluir transação',
+      'Tem certeza que deseja excluir esta transação?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: () => handleDeleteTransaction(id),
+        },
+      ]
+    );
+  }
+
+  function goToEditTransaction(id: number) {
+    router.push({
+      pathname: '/edit/[id]' as const,
+      params: { id: String(id) },
+    });
+  }
+
   useEffect(() => {
     loadData();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   function formatCurrency(value: number) {
     return value.toLocaleString('pt-BR', {
@@ -78,7 +124,10 @@ export default function HomeScreen() {
 
   function renderTransaction({ item }: { item: Transaction }) {
     return (
-      <View style={styles.transactionCard}>
+      <TouchableOpacity
+        style={styles.transactionCard}
+        onPress={() => goToEditTransaction(item.id)}
+      >
         <View style={styles.transactionHeader}>
           <Text style={styles.transactionTitle}>{item.description}</Text>
           <Text
@@ -98,7 +147,26 @@ export default function HomeScreen() {
         <Text style={styles.transactionMeta}>
           Pagamento: {item.paymentMethod ?? 'Não informado'}
         </Text>
-      </View>
+
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => goToEditTransaction(item.id)}
+          >
+            <Text style={styles.editButtonText}>Editar</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => confirmDelete(item.id)}
+            disabled={deletingId === item.id}
+          >
+            <Text style={styles.deleteButtonText}>
+              {deletingId === item.id ? 'Excluindo...' : 'Excluir'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
     );
   }
 
@@ -287,6 +355,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6B7280',
     marginBottom: 2,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  editButton: {
+    flex: 1,
+    backgroundColor: '#E5E7EB',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  editButtonText: {
+    color: '#111827',
+    fontWeight: '700',
+  },
+  deleteButton: {
+    flex: 1,
+    backgroundColor: '#FEE2E2',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#B91C1C',
+    fontWeight: '700',
   },
   emptyText: {
     textAlign: 'center',
