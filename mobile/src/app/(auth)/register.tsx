@@ -10,8 +10,8 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 
-import { api } from '../services/api';
-import { saveToken } from '../services/authStorage';
+import { api } from '../../services/api';
+import { saveToken } from '../../services/authStorage';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
@@ -37,7 +37,7 @@ export default function RegisterScreen() {
       await saveToken(response.data.token);
 
       Alert.alert('Sucesso', 'Conta criada com sucesso.');
-      router.replace('/(tabs)');
+      router.replace('/home');
     } catch (error: any) {
       console.error(error);
 

@@ -10,8 +10,8 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
-import { api } from '../../services/api';
-import type { Transaction } from '../../types';
+import { api } from '../../../services/api';
+import type { Transaction } from '../../../types';
 
 export default function TransactionDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
