@@ -59,9 +59,14 @@ export default function HomeScreen() {
       await loadData();
 
       Alert.alert('Sucesso', 'Transação registrada com sucesso.');
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      Alert.alert('Erro', 'Não foi possível registrar a transação.');
+
+      const apiMessage =
+        error?.response?.data?.message ??
+        'Não foi possível registrar a transação.';
+
+      Alert.alert('Erro', apiMessage);
     } finally {
       setSubmitting(false);
     }
