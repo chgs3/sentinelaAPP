@@ -14,8 +14,13 @@ import {
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 
-import { api } from '../services/api';
-import type { MonthlySummary, ParseMessageResponse, Transaction } from '../types';
+import { api } from '../../services/api';
+import { getToken, removeToken } from '../../services/authStorage';
+import type {
+  MonthlySummary,
+  ParseMessageResponse,
+  Transaction,
+} from '../../types';
 
 type TransactionTypeFilter = 'all' | 'expense' | 'income';
 
@@ -53,6 +58,22 @@ export default function HomeScreen() {
         setLoading(false);
       }
     }
+  }
+
+  async function ensureAuthenticated() {
+    const token = await getToken();
+
+    if (!token) {
+      router.replace('/login');
+      return false;
+    }
+
+    return true;
+  }
+
+  async function handleLogout() {
+    await removeToken();
+    router.replace('/login');
   }
 
   async function handleRefresh() {
@@ -140,12 +161,28 @@ export default function HomeScreen() {
   }
 
   useEffect(() => {
-    loadData(true);
+    async function bootstrap() {
+      const authenticated = await ensureAuthenticated();
+
+      if (!authenticated) return;
+
+      await loadData(true);
+    }
+
+    bootstrap();
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadData(false);
+      async function refreshIfAuthenticated() {
+        const authenticated = await ensureAuthenticated();
+
+        if (!authenticated) return;
+
+        await loadData(false);
+      }
+
+      refreshIfAuthenticated();
     }, [])
   );
 
@@ -268,6 +305,10 @@ export default function HomeScreen() {
           <>
             <Text style={styles.title}>Finance Agent</Text>
             <Text style={styles.subtitle}>Controle de gastos por mensagem</Text>
+
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutButtonText}>Sair</Text>
+            </TouchableOpacity>
 
             <View style={styles.summaryCard}>
               <Text style={styles.summaryTitle}>Resumo do mês</Text>
@@ -629,5 +670,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#6B7280',
     marginTop: 20,
+  },
+  logoutButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#E5E7EB',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    marginBottom: 16,
+  },
+  logoutButtonText: {
+    color: '#111827',
+    fontWeight: '700',
   },
 });
