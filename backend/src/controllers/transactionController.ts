@@ -13,7 +13,7 @@ class TransactionController {
         paymentMethod,
       } = req.body;
 
-      if (!type || !amount || !description || !category || !transactionAt) {
+      if (!type || amount === undefined || !description || !category || !transactionAt) {
         return res.status(400).json({
           message: 'Campos obrigatórios ausentes para criar transação manualmente.',
         });
@@ -63,6 +63,14 @@ class TransactionController {
   async update(req: Request, res: Response) {
     try {
       const { id } = req.params;
+      const transactionId = Number(id);
+
+      if (Number.isNaN(transactionId)) {
+        return res.status(400).json({
+          message: 'ID inválido.',
+        });
+      }
+
       const {
         type,
         amount,
@@ -72,25 +80,39 @@ class TransactionController {
         paymentMethod,
       } = req.body;
 
-      const transaction = await prisma.transaction.findUnique({
-        where: { id: Number(id) },
+      const existingTransaction = await prisma.transaction.findUnique({
+        where: { id: transactionId },
       });
 
-      if (!transaction) {
+      if (!existingTransaction) {
         return res.status(404).json({
           message: 'Transação não encontrada.',
         });
       }
 
+      let parsedDate = existingTransaction.transactionAt;
+
+      if (transactionAt !== undefined) {
+        const newDate = new Date(transactionAt);
+
+        if (Number.isNaN(newDate.getTime())) {
+          return res.status(400).json({
+            message: 'transactionAt inválido.',
+          });
+        }
+
+        parsedDate = newDate;
+      }
+
       const updatedTransaction = await prisma.transaction.update({
-        where: { id: Number(id) },
+        where: { id: transactionId },
         data: {
-          type: type ?? transaction.type,
-          amount: amount ?? transaction.amount,
-          description: description ?? transaction.description,
-          category: category ?? transaction.category,
-          transactionAt: transactionAt ? new Date(transactionAt) : transaction.transactionAt,
-          paymentMethod: paymentMethod ?? transaction.paymentMethod,
+          type: type ?? existingTransaction.type,
+          amount: amount ?? existingTransaction.amount,
+          description: description ?? existingTransaction.description,
+          category: category ?? existingTransaction.category,
+          transactionAt: parsedDate,
+          paymentMethod: paymentMethod ?? existingTransaction.paymentMethod,
         },
       });
 
@@ -104,19 +126,26 @@ class TransactionController {
   async delete(req: Request, res: Response) {
     try {
       const { id } = req.params;
+      const transactionId = Number(id);
 
-      const transaction = await prisma.transaction.findUnique({
-        where: { id: Number(id) },
+      if (Number.isNaN(transactionId)) {
+        return res.status(400).json({
+          message: 'ID inválido.',
+        });
+      }
+
+      const existingTransaction = await prisma.transaction.findUnique({
+        where: { id: transactionId },
       });
 
-      if (!transaction) {
+      if (!existingTransaction) {
         return res.status(404).json({
           message: 'Transação não encontrada.',
         });
       }
 
       await prisma.transaction.delete({
-        where: { id: Number(id) },
+        where: { id: transactionId },
       });
 
       return res.status(200).json({
