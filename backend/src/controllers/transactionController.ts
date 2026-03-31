@@ -11,6 +11,7 @@ class TransactionController {
         category,
         transactionAt,
         paymentMethod,
+        accountOrCard,
       } = req.body;
 
       if (!type || amount === undefined || !description || !category || !transactionAt) {
@@ -35,6 +36,7 @@ class TransactionController {
           category,
           transactionAt: parsedDate,
           paymentMethod: paymentMethod ?? null,
+          accountOrCard: accountOrCard ?? null,
         },
       });
 
@@ -78,6 +80,7 @@ class TransactionController {
         category,
         transactionAt,
         paymentMethod,
+        accountOrCard,
       } = req.body;
 
       const existingTransaction = await prisma.transaction.findUnique({
@@ -113,6 +116,7 @@ class TransactionController {
           category: category ?? existingTransaction.category,
           transactionAt: parsedDate,
           paymentMethod: paymentMethod ?? existingTransaction.paymentMethod,
+          accountOrCard: accountOrCard ?? existingTransaction.accountOrCard,
         },
       });
 

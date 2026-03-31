@@ -6,6 +6,7 @@ export type Transaction = {
   category: string;
   transactionAt: string;
   paymentMethod: string | null;
+  accountOrCard: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -28,6 +29,7 @@ export type ParseMessageResponse = {
     category: string;
     transactionAt: string;
     paymentMethod: string | null;
+    accountOrCard: string | null;
   };
   transaction: Transaction;
 };
