@@ -33,3 +33,9 @@ export type ParseMessageResponse = {
   };
   transaction: Transaction;
 };
+
+export type AuthUser = {
+  id: number;
+  name: string;
+  email: string;
+};

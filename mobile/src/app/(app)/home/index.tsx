@@ -14,13 +14,13 @@ import {
 } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 
-import { api } from '../../services/api';
-import { getToken, removeToken } from '../../services/authStorage';
+import { api } from '../../../services/api';
+import { removeToken } from '../../../services/authStorage';
 import type {
   MonthlySummary,
   ParseMessageResponse,
   Transaction,
-} from '../../types';
+} from '../../../types';
 
 type TransactionTypeFilter = 'all' | 'expense' | 'income';
 
@@ -58,22 +58,6 @@ export default function HomeScreen() {
         setLoading(false);
       }
     }
-  }
-
-  async function ensureAuthenticated() {
-    const token = await getToken();
-
-    if (!token) {
-      router.replace('/login');
-      return false;
-    }
-
-    return true;
-  }
-
-  async function handleLogout() {
-    await removeToken();
-    router.replace('/login');
   }
 
   async function handleRefresh() {
@@ -131,6 +115,11 @@ export default function HomeScreen() {
     }
   }
 
+  async function handleLogout() {
+    await removeToken();
+    router.replace('/login');
+  }
+
   function confirmDelete(id: number) {
     Alert.alert(
       'Excluir transação',
@@ -146,43 +135,27 @@ export default function HomeScreen() {
     );
   }
 
-  function goToTransactionDetails(id: number) {
+  function goToEditTransaction(id: number) {
     router.push({
-      pathname: '/transaction/[id]' as const,
+      pathname: '/edit/[id]',
       params: { id: String(id) },
     });
   }
 
-  function goToEditTransaction(id: number) {
+  function goToTransactionDetails(id: number) {
     router.push({
-      pathname: '/edit/[id]' as const,
+      pathname: '/transaction/[id]',
       params: { id: String(id) },
     });
   }
 
   useEffect(() => {
-    async function bootstrap() {
-      const authenticated = await ensureAuthenticated();
-
-      if (!authenticated) return;
-
-      await loadData(true);
-    }
-
-    bootstrap();
+    loadData(true);
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      async function refreshIfAuthenticated() {
-        const authenticated = await ensureAuthenticated();
-
-        if (!authenticated) return;
-
-        await loadData(false);
-      }
-
-      refreshIfAuthenticated();
+      loadData(false);
     }, [])
   );
 
@@ -483,7 +456,19 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: '#6B7280',
+    marginBottom: 12,
+  },
+  logoutButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#E5E7EB',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
     marginBottom: 16,
+  },
+  logoutButtonText: {
+    color: '#111827',
+    fontWeight: '700',
   },
   summaryCard: {
     backgroundColor: '#FFFFFF',
@@ -670,17 +655,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#6B7280',
     marginTop: 20,
-  },
-  logoutButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#E5E7EB',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    marginBottom: 16,
-  },
-  logoutButtonText: {
-    color: '#111827',
-    fontWeight: '700',
   },
 });
