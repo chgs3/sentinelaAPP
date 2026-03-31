@@ -147,6 +147,9 @@ export default function HomeScreen() {
         <Text style={styles.transactionMeta}>
           Pagamento: {item.paymentMethod ?? 'Não informado'}
         </Text>
+        <Text style={styles.transactionMeta}>
+          Conta/Cartão: {item.accountOrCard ?? 'Não informado'}
+        </Text>
 
         <View style={styles.actionsRow}>
           <TouchableOpacity
