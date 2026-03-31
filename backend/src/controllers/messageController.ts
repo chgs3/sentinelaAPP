@@ -5,6 +5,14 @@ import parseTransactionMessageService from '../services/parseTransactionMessageS
 class MessageController {
   async parseAndCreate(req: Request, res: Response) {
     try {
+      const userId = req.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
       const { message } = req.body;
 
       if (!message || typeof message !== 'string') {
@@ -22,7 +30,10 @@ class MessageController {
       }
 
       const transaction = await prisma.transaction.create({
-        data: parsed,
+        data: {
+          ...parsed,
+          userId,
+        },
       });
 
       return res.status(201).json({

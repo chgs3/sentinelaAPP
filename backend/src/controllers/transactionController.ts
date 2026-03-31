@@ -4,6 +4,14 @@ import prisma from '../config/prisma';
 class TransactionController {
   async create(req: Request, res: Response) {
     try {
+      const userId = req.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
       const {
         type,
         amount,
@@ -37,6 +45,7 @@ class TransactionController {
           transactionAt: parsedDate,
           paymentMethod: paymentMethod ?? null,
           accountOrCard: accountOrCard ?? null,
+          userId,
         },
       });
 
@@ -47,9 +56,20 @@ class TransactionController {
     }
   }
 
-  async list(_req: Request, res: Response) {
+  async list(req: Request, res: Response) {
     try {
+      const userId = req.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
       const transactions = await prisma.transaction.findMany({
+        where: {
+          userId,
+        },
         orderBy: {
           transactionAt: 'desc',
         },
@@ -64,6 +84,14 @@ class TransactionController {
 
   async update(req: Request, res: Response) {
     try {
+      const userId = req.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
       const { id } = req.params;
       const transactionId = Number(id);
 
@@ -83,8 +111,11 @@ class TransactionController {
         accountOrCard,
       } = req.body;
 
-      const existingTransaction = await prisma.transaction.findUnique({
-        where: { id: transactionId },
+      const existingTransaction = await prisma.transaction.findFirst({
+        where: {
+          id: transactionId,
+          userId,
+        },
       });
 
       if (!existingTransaction) {
@@ -129,6 +160,14 @@ class TransactionController {
 
   async delete(req: Request, res: Response) {
     try {
+      const userId = req.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
       const { id } = req.params;
       const transactionId = Number(id);
 
@@ -138,8 +177,11 @@ class TransactionController {
         });
       }
 
-      const existingTransaction = await prisma.transaction.findUnique({
-        where: { id: transactionId },
+      const existingTransaction = await prisma.transaction.findFirst({
+        where: {
+          id: transactionId,
+          userId,
+        },
       });
 
       if (!existingTransaction) {
