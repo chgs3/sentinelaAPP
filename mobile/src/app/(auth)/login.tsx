@@ -10,8 +10,8 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 
-import { api } from '../services/api';
-import { saveToken } from '../services/authStorage';
+import { api } from '../../services/api';
+import { saveToken } from '../../services/authStorage';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -35,7 +35,7 @@ export default function LoginScreen() {
       await saveToken(response.data.token);
 
       Alert.alert('Sucesso', 'Login realizado com sucesso.');
-      router.replace('/(tabs)');
+      router.replace('/home');
     } catch (error: any) {
       console.error(error);
 

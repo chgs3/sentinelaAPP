@@ -11,15 +11,10 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ title: 'Entrar' }} />
-        <Stack.Screen name="register" options={{ title: 'Criar conta' }} />
-        <Stack.Screen name="edit/[id]" options={{ title: 'Editar transação' }} />
-        <Stack.Screen
-          name="transaction/[id]"
-          options={{ title: 'Detalhes da transação' }}
-        />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(app)" />
       </Stack>
     </ThemeProvider>
   );

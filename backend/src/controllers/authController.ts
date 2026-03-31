@@ -99,6 +99,41 @@ class AuthController {
       });
     }
   }
+
+  async me(req: Request, res: Response) {
+    try {
+      const userId = req.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          message: 'Usuário não encontrado.',
+        });
+      }
+
+      return res.status(200).json({
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+        },
+      });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({
+        message: 'Erro ao buscar dados do usuário.',
+      });
+    }
+  }
 }
 
 export default new AuthController();
