@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import parseTransactionMessageService from '../services/parseTransactionMessageService';
+import { parseMessageSchema } from '../schemas/messageSchemas';
+import { getZodErrorMessage } from '../utils/zodError';
 
 class MessageController {
   async parseAndCreate(req: Request, res: Response) {
@@ -13,13 +15,15 @@ class MessageController {
         });
       }
 
-      const { message } = req.body;
+      const parsedBody = parseMessageSchema.safeParse(req.body);
 
-      if (!message || typeof message !== 'string') {
+      if (!parsedBody.success) {
         return res.status(400).json({
-          message: 'A mensagem é obrigatória e deve ser um texto.',
+          message: getZodErrorMessage(parsedBody.error),
         });
       }
+
+      const { message } = parsedBody.data;
 
       const parsed = parseTransactionMessageService.execute(message);
 

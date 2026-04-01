@@ -2,17 +2,21 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../config/prisma';
 import { generateToken } from '../utils/auth';
+import { getZodErrorMessage } from '../utils/zodError';
+import { loginSchema, registerSchema } from '../schemas/authSchemas';
 
 class AuthController {
   async register(req: Request, res: Response) {
     try {
-      const { name, email, password } = req.body;
+      const parsedBody = registerSchema.safeParse(req.body);
 
-      if (!name || !email || !password) {
+      if (!parsedBody.success) {
         return res.status(400).json({
-          message: 'Nome, email e senha são obrigatórios.',
+          message: getZodErrorMessage(parsedBody.error),
         });
       }
+
+      const { name, email, password } = parsedBody.data;
 
       const existingUser = await prisma.user.findUnique({
         where: { email },
@@ -55,13 +59,15 @@ class AuthController {
 
   async login(req: Request, res: Response) {
     try {
-      const { email, password } = req.body;
+      const parsedBody = loginSchema.safeParse(req.body);
 
-      if (!email || !password) {
+      if (!parsedBody.success) {
         return res.status(400).json({
-          message: 'Email e senha são obrigatórios.',
+          message: getZodErrorMessage(parsedBody.error),
         });
       }
+
+      const { email, password } = parsedBody.data;
 
       const user = await prisma.user.findUnique({
         where: { email },
