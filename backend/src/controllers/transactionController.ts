@@ -1,5 +1,10 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
+import {
+  createTransactionSchema,
+  updateTransactionSchema,
+} from '../schemas/transactionSchemas';
+import { getZodErrorMessage } from '../utils/zodError';
 
 class TransactionController {
   async create(req: Request, res: Response) {
@@ -12,6 +17,14 @@ class TransactionController {
         });
       }
 
+      const parsedBody = createTransactionSchema.safeParse(req.body);
+
+      if (!parsedBody.success) {
+        return res.status(400).json({
+          message: getZodErrorMessage(parsedBody.error),
+        });
+      }
+
       const {
         type,
         amount,
@@ -20,13 +33,7 @@ class TransactionController {
         transactionAt,
         paymentMethod,
         accountOrCard,
-      } = req.body;
-
-      if (!type || amount === undefined || !description || !category || !transactionAt) {
-        return res.status(400).json({
-          message: 'Campos obrigatórios ausentes para criar transação manualmente.',
-        });
-      }
+      } = parsedBody.data;
 
       const parsedDate = new Date(transactionAt);
 
@@ -67,9 +74,7 @@ class TransactionController {
       }
 
       const transactions = await prisma.transaction.findMany({
-        where: {
-          userId,
-        },
+        where: { userId },
         orderBy: {
           transactionAt: 'desc',
         },
@@ -101,6 +106,14 @@ class TransactionController {
         });
       }
 
+      const parsedBody = updateTransactionSchema.safeParse(req.body);
+
+      if (!parsedBody.success) {
+        return res.status(400).json({
+          message: getZodErrorMessage(parsedBody.error),
+        });
+      }
+
       const {
         type,
         amount,
@@ -109,7 +122,7 @@ class TransactionController {
         transactionAt,
         paymentMethod,
         accountOrCard,
-      } = req.body;
+      } = parsedBody.data;
 
       const existingTransaction = await prisma.transaction.findFirst({
         where: {
