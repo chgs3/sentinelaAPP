@@ -7,7 +7,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 
@@ -24,6 +23,7 @@ export default function EditTransactionScreen() {
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
+  const [accountOrCard, setAccountOrCard] = useState('');
 
   async function loadTransaction() {
     try {
@@ -42,9 +42,15 @@ export default function EditTransactionScreen() {
       setCategory(transaction.category);
       setAmount(String(transaction.amount));
       setPaymentMethod(transaction.paymentMethod ?? '');
-    } catch (error) {
+      setAccountOrCard(transaction.accountOrCard ?? '');
+    } catch (error: any) {
       console.error(error);
-      Alert.alert('Erro', 'Não foi possível carregar a transação.');
+
+      const apiMessage =
+        error?.response?.data?.message ??
+        'Não foi possível carregar a transação.';
+
+      Alert.alert('Erro', apiMessage);
       router.back();
     } finally {
       setLoading(false);
@@ -57,21 +63,34 @@ export default function EditTransactionScreen() {
       return;
     }
 
+    const parsedAmount = Number(amount.replace(',', '.'));
+
+    if (Number.isNaN(parsedAmount)) {
+      Alert.alert('Atenção', 'Informe um valor válido.');
+      return;
+    }
+
     try {
       setSaving(true);
 
       await api.put(`/transactions/${id}`, {
         description,
         category,
-        amount: Number(amount.replace(',', '.')),
+        amount: parsedAmount,
         paymentMethod: paymentMethod.trim() || null,
+        accountOrCard: accountOrCard.trim() || null,
       });
 
       Alert.alert('Sucesso', 'Transação atualizada com sucesso.');
       router.back();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      Alert.alert('Erro', 'Não foi possível atualizar a transação.');
+
+      const apiMessage =
+        error?.response?.data?.message ??
+        'Não foi possível atualizar a transação.';
+
+      Alert.alert('Erro', apiMessage);
     } finally {
       setSaving(false);
     }
@@ -94,47 +113,56 @@ export default function EditTransactionScreen() {
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Editar transação</Text>
 
-      <View style={styles.formCard}>
-        <Text style={styles.label}>Descrição</Text>
-        <TextInput
-          style={styles.input}
-          value={description}
-          onChangeText={setDescription}
-        />
+      <Text style={styles.label}>Descrição</Text>
+      <TextInput
+        style={styles.input}
+        value={description}
+        onChangeText={setDescription}
+        placeholder="Descrição"
+      />
 
-        <Text style={styles.label}>Categoria</Text>
-        <TextInput
-          style={styles.input}
-          value={category}
-          onChangeText={setCategory}
-        />
+      <Text style={styles.label}>Categoria</Text>
+      <TextInput
+        style={styles.input}
+        value={category}
+        onChangeText={setCategory}
+        placeholder="Categoria"
+      />
 
-        <Text style={styles.label}>Valor</Text>
-        <TextInput
-          style={styles.input}
-          value={amount}
-          onChangeText={setAmount}
-          keyboardType="numeric"
-        />
+      <Text style={styles.label}>Valor</Text>
+      <TextInput
+        style={styles.input}
+        value={amount}
+        onChangeText={setAmount}
+        placeholder="Valor"
+        keyboardType="numeric"
+      />
 
-        <Text style={styles.label}>Forma de pagamento</Text>
-        <TextInput
-          style={styles.input}
-          value={paymentMethod}
-          onChangeText={setPaymentMethod}
-          placeholder="Crédito, Débito, Pix..."
-        />
+      <Text style={styles.label}>Forma de pagamento</Text>
+      <TextInput
+        style={styles.input}
+        value={paymentMethod}
+        onChangeText={setPaymentMethod}
+        placeholder="Ex.: Crédito, Débito, Pix, Dinheiro"
+      />
 
-        <TouchableOpacity
-          style={[styles.button, saving && styles.buttonDisabled]}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          <Text style={styles.buttonText}>
-            {saving ? 'Salvando...' : 'Salvar alterações'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <Text style={styles.label}>Conta/Cartão</Text>
+      <TextInput
+        style={styles.input}
+        value={accountOrCard}
+        onChangeText={setAccountOrCard}
+        placeholder="Ex.: Nubank, Inter, PicPay"
+      />
+
+      <TouchableOpacity
+        style={[styles.button, saving && styles.buttonDisabled]}
+        onPress={handleSave}
+        disabled={saving}
+      >
+        <Text style={styles.buttonText}>
+          {saving ? 'Salvando...' : 'Salvar alterações'}
+        </Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -162,14 +190,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 16,
   },
-  formCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-  },
   label: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#374151',
     marginBottom: 6,
     marginTop: 10,
@@ -181,6 +204,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     backgroundColor: '#FFFFFF',
+    marginBottom: 4,
   },
   button: {
     marginTop: 20,
