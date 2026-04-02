@@ -1,8 +1,10 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
+import aiParseTransactionMessageService from '../services/aiParseTransactionMessageService';
 import parseTransactionMessageService from '../services/parseTransactionMessageService';
 import { parseMessageSchema } from '../schemas/messageSchemas';
 import { getZodErrorMessage } from '../utils/zodError';
+import { resolveRelativeDate } from '../utils/resolveRelativeDate';
 
 class MessageController {
   async parseAndCreate(req: Request, res: Response) {
@@ -25,24 +27,61 @@ class MessageController {
 
       const { message } = parsedBody.data;
 
-      const parsed = parseTransactionMessageService.execute(message);
+      let parsed = await aiParseTransactionMessageService.execute(message);
 
       if (!parsed) {
+        const fallback = parseTransactionMessageService.execute(message);
+
+        if (!fallback) {
+          return res.status(400).json({
+            message: 'Não foi possível interpretar a mensagem enviada.',
+          });
+        }
+
+        parsed = {
+          ...fallback,
+          transactionAt: fallback.transactionAt.toISOString(),
+          rawDateExpression: null,
+          confidence: 0.4,
+        };
+      }
+
+      const resolvedDate = resolveRelativeDate(
+        parsed.rawDateExpression,
+        parsed.transactionAt
+      );
+
+      if (Number.isNaN(resolvedDate.getTime())) {
         return res.status(400).json({
-          message: 'Não foi possível interpretar a mensagem enviada.',
+          message: 'Não foi possível resolver a data da transação.',
         });
       }
 
       const transaction = await prisma.transaction.create({
         data: {
-          ...parsed,
+          type: parsed.type,
+          amount: parsed.amount,
+          description: parsed.description,
+          category: parsed.category,
+          transactionAt: resolvedDate,
+          paymentMethod: parsed.paymentMethod,
+          accountOrCard: parsed.accountOrCard,
           userId,
         },
       });
 
+      console.log('Mensagem original:', message);
+      console.log('Parsed final:', {
+        ...parsed,
+        transactionAt: resolvedDate.toISOString(),
+      });
+
       return res.status(201).json({
         message: 'Transação criada com sucesso.',
-        parsed,
+        parsed: {
+          ...parsed,
+          transactionAt: resolvedDate.toISOString(),
+        },
         transaction,
       });
     } catch (error) {
