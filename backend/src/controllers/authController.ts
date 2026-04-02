@@ -4,6 +4,7 @@ import prisma from '../config/prisma';
 import { generateToken } from '../utils/auth';
 import { getZodErrorMessage } from '../utils/zodError';
 import { loginSchema, registerSchema } from '../schemas/authSchemas';
+import { updateProfileSchema } from '../schemas/profileSchemas';
 
 class AuthController {
   async register(req: Request, res: Response) {
@@ -137,6 +138,46 @@ class AuthController {
       console.error(error);
       return res.status(500).json({
         message: 'Erro ao buscar dados do usuário.',
+      });
+    }
+  }
+  async updateProfile(req: Request, res: Response) {
+    try {
+      const userId = req.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
+      const parsedBody = updateProfileSchema.safeParse(req.body);
+
+      if (!parsedBody.success) {
+        return res.status(400).json({
+          message: getZodErrorMessage(parsedBody.error),
+        });
+      }
+
+      const { name } = parsedBody.data;
+
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: { name },
+      });
+
+      return res.status(200).json({
+        message: 'Perfil atualizado com sucesso.',
+        user: {
+          id: updatedUser.id,
+          name: updatedUser.name,
+          email: updatedUser.email,
+        },
+      });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({
+        message: 'Erro ao atualizar perfil.',
       });
     }
   }
