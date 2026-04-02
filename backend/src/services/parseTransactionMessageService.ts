@@ -164,12 +164,12 @@ class ParseTransactionMessageService {
 
   private detectCategory(description: string): string {
     const rules: Record<string, string[]> = {
-      Transporte: ['uber', '99', 'taxi', 'gasolina', 'ônibus', 'onibus', 'metrô', 'metro'],
-      Alimentação: ['ifood', 'comida', 'lanche', 'restaurante', 'mercado', 'café', 'cafe'],
-      Moradia: ['aluguel', 'energia', 'água', 'agua', 'internet', 'condomínio', 'condominio'],
+      Transporte: ['uber', '99', 'taxi', 'gasolina', 'ônibus', 'onibus', 'metrô', 'metro', 'moto'],
+      Alimentação: ['ifood', 'comida', 'lanche', 'restaurante', 'mercado', 'café', 'cafe', 'delivery', 'mcdonalds', 'burger king', 'subway', 'mc donalds', 'mc'],
+      Moradia: ['aluguel', 'energia', 'água', 'agua', 'internet', 'condomínio', 'condominio', 'luz', 'gás', 'gas'],
       Saúde: ['farmácia', 'farmacia', 'médico', 'medico', 'consulta', 'remédio', 'remedio'],
-      Lazer: ['cinema', 'netflix', 'spotify', 'viagem', 'bar', 'show'],
-      Trabalho: ['freela', 'freelance', 'curso', 'faculdade', 'livro', 'software', 'ferramenta', 'projeto'],
+      Lazer: ['cinema', 'netflix', 'spotify', 'viagem', 'bar', 'show', 'role', 'balada'],
+      Trabalho: ['freela', 'freelance', 'curso', 'faculdade', 'livro', 'software', 'ferramenta', 'projeto', 'cliente', 'estagio', 'estágio', 'salário', 'salario', 'recebimento'],
     };
 
     for (const [category, keywords] of Object.entries(rules)) {

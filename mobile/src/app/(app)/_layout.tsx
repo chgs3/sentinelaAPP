@@ -5,6 +5,10 @@ export default function AppLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="home" />
       <Stack.Screen
+        name="edit-profile"
+        options={{ headerShown: true, title: 'Editar perfil' }}
+      />
+      <Stack.Screen
         name="edit/[id]"
         options={{ headerShown: true, title: 'Editar transação' }}
       />

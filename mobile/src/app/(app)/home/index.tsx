@@ -17,6 +17,7 @@ import { useFocusEffect, router } from 'expo-router';
 import { api } from '../../../services/api';
 import { removeToken } from '../../../services/authStorage';
 import type {
+  AuthUser,
   MonthlySummary,
   ParseMessageResponse,
   Transaction,
@@ -36,6 +37,7 @@ export default function HomeScreen() {
 
   const [typeFilter, setTypeFilter] = useState<TransactionTypeFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState('Todas');
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   async function loadData(showInitialLoading = false) {
     try {
@@ -43,11 +45,13 @@ export default function HomeScreen() {
         setLoading(true);
       }
 
-      const [summaryResponse, transactionsResponse] = await Promise.all([
+      const [meResponse, summaryResponse, transactionsResponse] = await Promise.all([
+        api.get<{ user: AuthUser }>('/auth/me'),
         api.get<MonthlySummary>('/summary/monthly'),
         api.get<Transaction[]>('/transactions'),
       ]);
 
+      setUser(meResponse.data.user);
       setSummary(summaryResponse.data);
       setTransactions(transactionsResponse.data);
     } catch (error) {
@@ -278,6 +282,15 @@ export default function HomeScreen() {
           <>
             <Text style={styles.title}>Finance Agent</Text>
             <Text style={styles.subtitle}>Controle de gastos por mensagem</Text>
+
+            <View style={styles.userCard}>
+              <Text style={styles.userGreeting}>
+                Olá, {user?.name ?? 'usuário'}
+              </Text>
+              <Text style={styles.userEmail}>
+                {user?.email ?? 'email não disponível'}
+              </Text>
+            </View>
 
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
               <Text style={styles.logoutButtonText}>Sair</Text>
@@ -655,5 +668,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#6B7280',
     marginTop: 20,
+  },
+  userCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  userGreeting: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#6B7280',
   },
 });

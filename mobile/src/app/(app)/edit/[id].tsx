@@ -3,15 +3,35 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  View,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 
 import { api } from '../../../services/api';
 import type { Transaction } from '../../../types';
+
+const paymentMethodOptions = [
+  { label: 'Crédito', value: 'credit' },
+  { label: 'Débito', value: 'debit' },
+  { label: 'Pix', value: 'pix' },
+  { label: 'Dinheiro', value: 'cash' },
+];
+
+const accountOptions = [
+  'nubank',
+  'inter',
+  'picpay',
+  'caixa',
+  'itau',
+  'bradesco',
+  'santander',
+  'banco do brasil',
+];
 
 export default function EditTransactionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -22,8 +42,9 @@ export default function EditTransactionScreen() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('');
-  const [accountOrCard, setAccountOrCard] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
+  const [accountOrCard, setAccountOrCard] = useState<string | null>(null);
+  const [customAccount, setCustomAccount] = useState('');
 
   async function loadTransaction() {
     try {
@@ -41,8 +62,17 @@ export default function EditTransactionScreen() {
       setDescription(transaction.description);
       setCategory(transaction.category);
       setAmount(String(transaction.amount));
-      setPaymentMethod(transaction.paymentMethod ?? '');
-      setAccountOrCard(transaction.accountOrCard ?? '');
+      setPaymentMethod(transaction.paymentMethod ?? null);
+
+      const currentAccount = transaction.accountOrCard ?? null;
+
+      if (currentAccount && accountOptions.includes(currentAccount)) {
+        setAccountOrCard(currentAccount);
+        setCustomAccount('');
+      } else {
+        setAccountOrCard(null);
+        setCustomAccount(currentAccount ?? '');
+      }
     } catch (error: any) {
       console.error(error);
 
@@ -65,20 +95,23 @@ export default function EditTransactionScreen() {
 
     const parsedAmount = Number(amount.replace(',', '.'));
 
-    if (Number.isNaN(parsedAmount)) {
+    if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
       Alert.alert('Atenção', 'Informe um valor válido.');
       return;
     }
+
+    const finalAccountOrCard =
+      customAccount.trim() || accountOrCard || null;
 
     try {
       setSaving(true);
 
       await api.put(`/transactions/${id}`, {
-        description,
-        category,
+        description: description.trim(),
+        category: category.trim(),
         amount: parsedAmount,
-        paymentMethod: paymentMethod.trim() || null,
-        accountOrCard: accountOrCard.trim() || null,
+        paymentMethod,
+        accountOrCard: finalAccountOrCard,
       });
 
       Alert.alert('Sucesso', 'Transação atualizada com sucesso.');
@@ -96,6 +129,20 @@ export default function EditTransactionScreen() {
     }
   }
 
+  function togglePaymentMethod(value: string) {
+    setPaymentMethod((current) => (current === value ? null : value));
+  }
+
+  function toggleAccount(value: string) {
+    if (accountOrCard === value) {
+      setAccountOrCard(null);
+      return;
+    }
+
+    setAccountOrCard(value);
+    setCustomAccount('');
+  }
+
   useEffect(() => {
     loadTransaction();
   }, []);
@@ -111,58 +158,100 @@ export default function EditTransactionScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Editar transação</Text>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Editar transação</Text>
 
-      <Text style={styles.label}>Descrição</Text>
-      <TextInput
-        style={styles.input}
-        value={description}
-        onChangeText={setDescription}
-        placeholder="Descrição"
-      />
+        <Text style={styles.label}>Descrição</Text>
+        <TextInput
+          style={styles.input}
+          value={description}
+          onChangeText={setDescription}
+          placeholder="Descrição"
+        />
 
-      <Text style={styles.label}>Categoria</Text>
-      <TextInput
-        style={styles.input}
-        value={category}
-        onChangeText={setCategory}
-        placeholder="Categoria"
-      />
+        <Text style={styles.label}>Categoria</Text>
+        <TextInput
+          style={styles.input}
+          value={category}
+          onChangeText={setCategory}
+          placeholder="Categoria"
+        />
 
-      <Text style={styles.label}>Valor</Text>
-      <TextInput
-        style={styles.input}
-        value={amount}
-        onChangeText={setAmount}
-        placeholder="Valor"
-        keyboardType="numeric"
-      />
+        <Text style={styles.label}>Valor</Text>
+        <TextInput
+          style={styles.input}
+          value={amount}
+          onChangeText={setAmount}
+          placeholder="Valor"
+          keyboardType="numeric"
+        />
 
-      <Text style={styles.label}>Forma de pagamento</Text>
-      <TextInput
-        style={styles.input}
-        value={paymentMethod}
-        onChangeText={setPaymentMethod}
-        placeholder="Ex.: Crédito, Débito, Pix, Dinheiro"
-      />
+        <Text style={styles.label}>Forma de pagamento</Text>
+        <View style={styles.chipsRow}>
+          {paymentMethodOptions.map((option) => {
+            const isActive = paymentMethod === option.value;
 
-      <Text style={styles.label}>Conta/Cartão</Text>
-      <TextInput
-        style={styles.input}
-        value={accountOrCard}
-        onChangeText={setAccountOrCard}
-        placeholder="Ex.: Nubank, Inter, PicPay"
-      />
+            return (
+              <TouchableOpacity
+                key={option.value}
+                style={[styles.chip, isActive && styles.chipActive]}
+                onPress={() => togglePaymentMethod(option.value)}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    isActive && styles.chipTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-      <TouchableOpacity
-        style={[styles.button, saving && styles.buttonDisabled]}
-        onPress={handleSave}
-        disabled={saving}
-      >
-        <Text style={styles.buttonText}>
-          {saving ? 'Salvando...' : 'Salvar alterações'}
-        </Text>
-      </TouchableOpacity>
+        <Text style={styles.label}>Conta/Cartão</Text>
+        <View style={styles.chipsRow}>
+          {accountOptions.map((option) => {
+            const isActive = accountOrCard === option;
+
+            return (
+              <TouchableOpacity
+                key={option}
+                style={[styles.chip, isActive && styles.chipActiveDark]}
+                onPress={() => toggleAccount(option)}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    isActive && styles.chipTextActive,
+                  ]}
+                >
+                  {option}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Text style={styles.label}>Conta/Cartão personalizado</Text>
+        <TextInput
+          style={styles.input}
+          value={customAccount}
+          onChangeText={setCustomAccount}
+          placeholder="Ex.: carteira, neon, wise..."
+        />
+
+        <TouchableOpacity
+          style={[styles.button, saving && styles.buttonDisabled]}
+          onPress={handleSave}
+          disabled={saving}
+        >
+          <Text style={styles.buttonText}>
+            {saving ? 'Salvando...' : 'Salvar alterações'}
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -171,7 +260,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F7FB',
+  },
+  content: {
     padding: 16,
+    paddingBottom: 32,
   },
   centered: {
     flex: 1,
@@ -205,6 +297,32 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: '#FFFFFF',
     marginBottom: 4,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  chip: {
+    backgroundColor: '#E5E7EB',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  chipActive: {
+    backgroundColor: '#2563EB',
+  },
+  chipActiveDark: {
+    backgroundColor: '#111827',
+  },
+  chipText: {
+    color: '#111827',
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  chipTextActive: {
+    color: '#FFFFFF',
   },
   button: {
     marginTop: 20,
