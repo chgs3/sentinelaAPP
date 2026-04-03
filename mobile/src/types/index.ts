@@ -1,3 +1,9 @@
+export type AuthUser = {
+  id: number;
+  name: string;
+  email: string;
+};
+
 export type Transaction = {
   id: number;
   type: 'expense' | 'income';
@@ -5,37 +11,50 @@ export type Transaction = {
   description: string;
   category: string;
   transactionAt: string;
-  paymentMethod: string | null;
+  paymentMethod: 'credit' | 'debit' | 'pix' | 'cash' | null;
   accountOrCard: string | null;
-  createdAt: string;
-  updatedAt: string;
+  userId: number;
 };
 
 export type MonthlySummary = {
-  month: number;
-  year: number;
-  totalTransactions: number;
-  totalExpenses: number;
   totalIncomes: number;
+  totalExpenses: number;
   balance: number;
+  totalTransactions: number;
 };
 
-export type ParseMessageResponse = {
-  message: string;
-  parsed: {
-    type: 'expense' | 'income';
-    amount: number;
-    description: string;
-    category: string;
-    transactionAt: string;
-    paymentMethod: string | null;
-    accountOrCard: string | null;
-  };
-  transaction: Transaction;
+export type ParsedTransaction = {
+  type: 'expense' | 'income';
+  amount: number;
+  description: string;
+  category: string;
+  transactionAt: string;
+  rawDateExpression?: string | null;
+  paymentMethod: 'credit' | 'debit' | 'pix' | 'cash' | null;
+  accountOrCard: string | null;
+  confidence?: number;
+  possibleTransfer?: boolean;
 };
 
-export type AuthUser = {
-  id: number;
-  name: string;
-  email: string;
-};
+export type ParseStatus = 'created' | 'needs_confirmation' | 'unable_to_parse';
+
+export type ParseMessageResponse =
+  | {
+      status: 'created';
+      message: string;
+      ambiguities: string[];
+      parsed: ParsedTransaction;
+      transaction: Transaction;
+    }
+  | {
+      status: 'needs_confirmation';
+      message: string;
+      ambiguities: string[];
+      parsed: ParsedTransaction;
+    }
+  | {
+      status: 'unable_to_parse';
+      message: string;
+      ambiguities: string[];
+      parsed?: ParsedTransaction;
+    };

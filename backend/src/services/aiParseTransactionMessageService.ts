@@ -16,7 +16,7 @@ class AIParseTransactionMessageService {
     const prompt = `
 Você é um extrator de transações financeiras em português do Brasil.
 
-Sua tarefa é converter uma mensagem do usuário em uma transação estruturada.
+Sua tarefa é converter a mensagem do usuário em uma transação estruturada.
 
 Regras:
 - "type" deve ser "expense" ou "income".
@@ -26,14 +26,15 @@ Regras:
   Transporte, Alimentação, Moradia, Saúde, Lazer, Trabalho, Outros.
 - "transactionAt" deve estar em formato ISO date-time.
 - "rawDateExpression" deve conter a expressão temporal original, quando existir.
-  Exemplos: "ontem", "hoje", "última quarta feira", "sábado", "domingo passado".
 - "paymentMethod" deve ser um destes: "credit", "debit", "pix", "cash", ou null.
 - "accountOrCard" deve ser string ou null.
 - "confidence" deve ser um número entre 0 e 1.
+- "possibleTransfer" deve ser true se a mensagem puder representar transferência entre contas, e false caso contrário.
 - Se não souber um campo opcional, use null.
 - Interprete datas relativas considerando que hoje é ${today}.
 - Para "última quarta-feira", "última segunda-feira" e semelhantes, use o dia da semana mais recente no passado.
 - Não invente valor.
+- Se houver ambiguidade entre receita, despesa e transferência, marque a saída com confiança menor.
 - Não responda texto explicativo. Apenas JSON válido.
 
 Mensagem:
@@ -84,6 +85,9 @@ ${message}
             confidence: {
               type: 'number',
             },
+            possibleTransfer: {
+              type: 'boolean',
+            },
           },
           required: [
             'type',
@@ -93,6 +97,7 @@ ${message}
             'transactionAt',
             'paymentMethod',
             'accountOrCard',
+            'possibleTransfer',
           ],
         },
       },
