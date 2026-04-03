@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { ActivityIndicator, SafeAreaView, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 import { api } from '../services/api';
@@ -39,13 +40,11 @@ export default function AppEntryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FB',
     justifyContent: 'center',
     alignItems: 'center',
   },
   text: {
     marginTop: 12,
     fontSize: 16,
-    color: '#374151',
   },
 });

@@ -1,4 +1,4 @@
-# Finance Agent
+# Sentinela
 
 Aplicativo de controle de gastos com entrada em linguagem natural.
 
