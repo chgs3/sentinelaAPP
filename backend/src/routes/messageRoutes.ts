@@ -3,10 +3,7 @@ import messageController from '../controllers/messageController';
 
 const messageRoutes = Router();
 
-messageRoutes.get('/test', (_req, res) => {
-  return res.json({ message: 'message route ok' });
-});
-
 messageRoutes.post('/parse', messageController.parseAndCreate);
+messageRoutes.post('/confirm', messageController.confirmParsedTransaction);
 
 export default messageRoutes;

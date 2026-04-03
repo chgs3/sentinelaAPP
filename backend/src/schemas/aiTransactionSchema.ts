@@ -10,6 +10,7 @@ export const aiTransactionSchema = z.object({
   paymentMethod: z.enum(['credit', 'debit', 'pix', 'cash']).nullable(),
   accountOrCard: z.string().nullable(),
   confidence: z.number().min(0).max(1).optional(),
+  possibleTransfer: z.boolean().optional(),
 });
 
 export type AITransactionOutput = z.infer<typeof aiTransactionSchema>;
