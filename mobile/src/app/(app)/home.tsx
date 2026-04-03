@@ -37,6 +37,8 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [pendingConfirmation, setPendingConfirmation] =
+    useState<ParseMessageResponse | null>(null);
 
   const [typeFilter, setTypeFilter] = useState<TransactionTypeFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState('Todas');
@@ -47,11 +49,12 @@ export default function HomeScreen() {
         setLoading(true);
       }
 
-      const [meResponse, summaryResponse, transactionsResponse] = await Promise.all([
-        api.get<{ user: AuthUser }>('/auth/me'),
-        api.get<MonthlySummary>('/summary/monthly'),
-        api.get<Transaction[]>('/transactions'),
-      ]);
+      const [meResponse, summaryResponse, transactionsResponse] =
+        await Promise.all([
+          api.get<{ user: AuthUser }>('/auth/me'),
+          api.get<MonthlySummary>('/summary/monthly'),
+          api.get<Transaction[]>('/transactions'),
+        ]);
 
       setUser(meResponse.data.user);
       setSummary(summaryResponse.data);
@@ -84,20 +87,81 @@ export default function HomeScreen() {
     try {
       setSubmitting(true);
 
-      await api.post<ParseMessageResponse>('/messages/parse', {
+      const response = await api.post<ParseMessageResponse>('/messages/parse', {
         message,
       });
 
-      setMessage('');
-      await loadData(false);
+      const result = response.data;
 
-      Alert.alert('Sucesso', 'Transação registrada com sucesso.');
+      if (result.status === 'created') {
+        setMessage('');
+        setPendingConfirmation(null);
+        await loadData(false);
+
+        Alert.alert('Sucesso', 'Transação registrada com sucesso.');
+        return;
+      }
+
+      if (result.status === 'needs_confirmation') {
+        setPendingConfirmation(result);
+        Alert.alert(
+          'Confirmação necessária',
+          'O Sentinela entendeu sua mensagem, mas quer sua confirmação antes de salvar.'
+        );
+        return;
+      }
+
+      if (result.status === 'unable_to_parse') {
+        const ambiguitiesText =
+          result.ambiguities.length > 0
+            ? `\n\nPontos de atenção:\n- ${result.ambiguities.join('\n- ')}`
+            : '';
+
+        Alert.alert(
+          'Não foi possível registrar',
+          `${result.message}${ambiguitiesText}`
+        );
+        return;
+      }
     } catch (error: any) {
       console.error(error);
 
       const apiMessage =
         error?.response?.data?.message ??
         'Não foi possível registrar a transação.';
+
+      Alert.alert('Erro', apiMessage);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleConfirmParsedTransaction() {
+    if (
+      !pendingConfirmation ||
+      pendingConfirmation.status !== 'needs_confirmation'
+    ) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      await api.post('/messages/confirm', {
+        parsed: pendingConfirmation.parsed,
+      });
+
+      setPendingConfirmation(null);
+      setMessage('');
+      await loadData(false);
+
+      Alert.alert('Sucesso', 'Transação confirmada e registrada com sucesso.');
+    } catch (error: any) {
+      console.error(error);
+
+      const apiMessage =
+        error?.response?.data?.message ??
+        'Não foi possível confirmar a transação.';
 
       Alert.alert('Erro', apiMessage);
     } finally {
@@ -305,7 +369,6 @@ export default function HomeScreen() {
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <>
-
             <View
               style={[
                 styles.userCard,
@@ -389,6 +452,77 @@ export default function HomeScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+
+            {pendingConfirmation?.status === 'needs_confirmation' && (
+              <View
+                style={[
+                  styles.formCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.formTitle, { color: colors.text }]}>
+                  Confirmar interpretação
+                </Text>
+
+                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
+                  Tipo:{' '}
+                  {pendingConfirmation.parsed.type === 'expense'
+                    ? 'Despesa'
+                    : 'Receita'}
+                </Text>
+                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
+                  Valor: {formatCurrency(pendingConfirmation.parsed.amount)}
+                </Text>
+                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
+                  Descrição: {pendingConfirmation.parsed.description}
+                </Text>
+                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
+                  Categoria: {pendingConfirmation.parsed.category}
+                </Text>
+                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
+                  Data:{' '}
+                  {new Date(
+                    pendingConfirmation.parsed.transactionAt
+                  ).toLocaleDateString('pt-BR')}
+                </Text>
+
+                {pendingConfirmation.ambiguities.length > 0 && (
+                  <View style={styles.attentionBox}>
+                    <Text style={[styles.filterLabel, { color: colors.text }]}>
+                      Pontos de atenção
+                    </Text>
+                    {pendingConfirmation.ambiguities.map((item, index) => (
+                      <Text
+                        key={`${item}-${index}`}
+                        style={[
+                          styles.transactionMeta,
+                          { color: colors.textMuted },
+                        ]}
+                      >
+                        • {item}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    { backgroundColor: colors.primary },
+                    submitting && styles.buttonDisabled,
+                  ]}
+                  onPress={handleConfirmParsedTransaction}
+                  disabled={submitting}
+                >
+                  <Text style={styles.buttonText}>
+                    {submitting ? 'Confirmando...' : 'Confirmar e salvar'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <View
               style={[
@@ -537,6 +671,7 @@ const styles = StyleSheet.create({
   userCard: {
     padding: 16,
     borderRadius: 18,
+    marginTop: 12,
     marginBottom: 16,
     borderWidth: 1,
   },
@@ -594,6 +729,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 16,
+  },
+  attentionBox: {
+    marginTop: 10,
+    marginBottom: 12,
   },
   filtersCard: {
     padding: 16,
