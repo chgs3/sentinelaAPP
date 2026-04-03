@@ -4,7 +4,6 @@ import {
   Alert,
   FlatList,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,20 +11,24 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, router } from 'expo-router';
 
-import { api } from '../../../services/api';
-import { removeToken } from '../../../services/authStorage';
+import { api } from '../../services/api';
+import { useAppTheme } from '../../hooks/useAppTheme';
 import type {
   AuthUser,
   MonthlySummary,
   ParseMessageResponse,
   Transaction,
-} from '../../../types';
+} from '../../types';
 
 type TransactionTypeFilter = 'all' | 'expense' | 'income';
 
 export default function HomeScreen() {
+  const { colors } = useAppTheme();
+
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [summary, setSummary] = useState<MonthlySummary | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [message, setMessage] = useState('');
@@ -37,7 +40,6 @@ export default function HomeScreen() {
 
   const [typeFilter, setTypeFilter] = useState<TransactionTypeFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState('Todas');
-  const [user, setUser] = useState<AuthUser | null>(null);
 
   async function loadData(showInitialLoading = false) {
     try {
@@ -117,11 +119,6 @@ export default function HomeScreen() {
     } finally {
       setDeletingId(null);
     }
-  }
-
-  async function handleLogout() {
-    await removeToken();
-    router.replace('/login');
   }
 
   function confirmDelete(id: number) {
@@ -211,46 +208,67 @@ export default function HomeScreen() {
   function renderTransaction({ item }: { item: Transaction }) {
     return (
       <TouchableOpacity
-        style={styles.transactionCard}
+        style={[
+          styles.transactionCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          },
+        ]}
         onPress={() => goToTransactionDetails(item.id)}
       >
         <View style={styles.transactionHeader}>
-          <Text style={styles.transactionTitle}>{item.description}</Text>
+          <Text style={[styles.transactionTitle, { color: colors.text }]}>
+            {item.description}
+          </Text>
           <Text
             style={[
               styles.transactionAmount,
-              item.type === 'income' ? styles.income : styles.expense,
+              {
+                color:
+                  item.type === 'income' ? colors.success : colors.danger,
+              },
             ]}
           >
             {item.type === 'income' ? '+' : '-'} {formatCurrency(item.amount)}
           </Text>
         </View>
 
-        <Text style={styles.transactionMeta}>Categoria: {item.category}</Text>
-        <Text style={styles.transactionMeta}>
+        <Text style={[styles.transactionMeta, { color: colors.textMuted }]}>
+          Categoria: {item.category}
+        </Text>
+        <Text style={[styles.transactionMeta, { color: colors.textMuted }]}>
           Data: {new Date(item.transactionAt).toLocaleDateString('pt-BR')}
         </Text>
-        <Text style={styles.transactionMeta}>
+        <Text style={[styles.transactionMeta, { color: colors.textMuted }]}>
           Pagamento: {item.paymentMethod ?? 'Não informado'}
         </Text>
-        <Text style={styles.transactionMeta}>
+        <Text style={[styles.transactionMeta, { color: colors.textMuted }]}>
           Conta/Cartão: {item.accountOrCard ?? 'Não informado'}
         </Text>
 
         <View style={styles.actionsRow}>
           <TouchableOpacity
-            style={styles.editButton}
+            style={[
+              styles.editButton,
+              { backgroundColor: colors.surfaceSecondary },
+            ]}
             onPress={() => goToEditTransaction(item.id)}
           >
-            <Text style={styles.editButtonText}>Editar</Text>
+            <Text style={[styles.editButtonText, { color: colors.text }]}>
+              Editar
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.deleteButton}
+            style={[
+              styles.deleteButton,
+              { backgroundColor: colors.dangerSoft },
+            ]}
             onPress={() => confirmDelete(item.id)}
             disabled={deletingId === item.id}
           >
-            <Text style={styles.deleteButtonText}>
+            <Text style={[styles.deleteButtonText, { color: colors.danger }]}>
               {deletingId === item.id ? 'Excluindo...' : 'Excluir'}
             </Text>
           </TouchableOpacity>
@@ -261,15 +279,22 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.centered}>
+      <SafeAreaView
+        style={[styles.centered, { backgroundColor: colors.background }]}
+      >
         <ActivityIndicator size="large" />
-        <Text style={styles.loadingText}>Carregando dados...</Text>
+        <Text style={[styles.loadingText, { color: colors.textMuted }]}>
+          Carregando dados...
+        </Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      edges={['bottom']}
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       <FlatList
         data={filteredTransactions}
         keyExtractor={(item) => String(item.id)}
@@ -280,48 +305,82 @@ export default function HomeScreen() {
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <>
-            <Text style={styles.title}>Finance Agent</Text>
-            <Text style={styles.subtitle}>Controle de gastos por mensagem</Text>
 
-            <View style={styles.userCard}>
-              <Text style={styles.userGreeting}>
+            <View
+              style={[
+                styles.userCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.userGreeting, { color: colors.text }]}>
                 Olá, {user?.name ?? 'usuário'}
               </Text>
-              <Text style={styles.userEmail}>
+              <Text style={[styles.userEmail, { color: colors.textMuted }]}>
                 {user?.email ?? 'email não disponível'}
               </Text>
             </View>
 
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-              <Text style={styles.logoutButtonText}>Sair</Text>
-            </TouchableOpacity>
-
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Resumo do mês</Text>
-              <Text style={styles.summaryItem}>
+            <View
+              style={[
+                styles.summaryCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.summaryTitle, { color: colors.text }]}>
+                Resumo do mês
+              </Text>
+              <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
                 Receitas: {formatCurrency(summary?.totalIncomes ?? 0)}
               </Text>
-              <Text style={styles.summaryItem}>
+              <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
                 Despesas: {formatCurrency(summary?.totalExpenses ?? 0)}
               </Text>
-              <Text style={styles.summaryItem}>
+              <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
                 Saldo: {formatCurrency(summary?.balance ?? 0)}
               </Text>
-              <Text style={styles.summaryItem}>
+              <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
                 Transações: {summary?.totalTransactions ?? 0}
               </Text>
             </View>
 
-            <View style={styles.formCard}>
-              <Text style={styles.formTitle}>Registrar por mensagem</Text>
+            <View
+              style={[
+                styles.formCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.formTitle, { color: colors.text }]}>
+                Registrar por mensagem
+              </Text>
               <TextInput
-                style={styles.input}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.border,
+                    color: colors.text,
+                  },
+                ]}
                 placeholder="Ex.: Gastei 32,50 com uber"
+                placeholderTextColor={colors.textMuted}
                 value={message}
                 onChangeText={setMessage}
               />
               <TouchableOpacity
-                style={[styles.button, submitting && styles.buttonDisabled]}
+                style={[
+                  styles.button,
+                  { backgroundColor: colors.primary },
+                  submitting && styles.buttonDisabled,
+                ]}
                 onPress={handleSubmitMessage}
                 disabled={submitting}
               >
@@ -331,72 +390,79 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.filtersCard}>
-              <Text style={styles.filtersTitle}>Filtros</Text>
+            <View
+              style={[
+                styles.filtersCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.filtersTitle, { color: colors.text }]}>
+                Filtros
+              </Text>
 
-              <Text style={styles.filterLabel}>Busca</Text>
+              <Text style={[styles.filterLabel, { color: colors.text }]}>
+                Busca
+              </Text>
               <TextInput
-                style={styles.input}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.border,
+                    color: colors.text,
+                  },
+                ]}
                 placeholder="Buscar por descrição, categoria, pix, nubank..."
+                placeholderTextColor={colors.textMuted}
                 value={search}
                 onChangeText={setSearch}
               />
 
-              <Text style={styles.filterLabel}>Tipo</Text>
+              <Text style={[styles.filterLabel, { color: colors.text }]}>
+                Tipo
+              </Text>
               <View style={styles.filterRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.filterButton,
-                    typeFilter === 'all' && styles.filterButtonActive,
-                  ]}
-                  onPress={() => setTypeFilter('all')}
-                >
-                  <Text
-                    style={[
-                      styles.filterButtonText,
-                      typeFilter === 'all' && styles.filterButtonTextActive,
-                    ]}
-                  >
-                    Todos
-                  </Text>
-                </TouchableOpacity>
+                {[
+                  ['all', 'Todos'],
+                  ['expense', 'Despesas'],
+                  ['income', 'Receitas'],
+                ].map(([value, label]) => {
+                  const active = typeFilter === value;
 
-                <TouchableOpacity
-                  style={[
-                    styles.filterButton,
-                    typeFilter === 'expense' && styles.filterButtonActive,
-                  ]}
-                  onPress={() => setTypeFilter('expense')}
-                >
-                  <Text
-                    style={[
-                      styles.filterButtonText,
-                      typeFilter === 'expense' && styles.filterButtonTextActive,
-                    ]}
-                  >
-                    Despesas
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.filterButton,
-                    typeFilter === 'income' && styles.filterButtonActive,
-                  ]}
-                  onPress={() => setTypeFilter('income')}
-                >
-                  <Text
-                    style={[
-                      styles.filterButtonText,
-                      typeFilter === 'income' && styles.filterButtonTextActive,
-                    ]}
-                  >
-                    Receitas
-                  </Text>
-                </TouchableOpacity>
+                  return (
+                    <TouchableOpacity
+                      key={value}
+                      style={[
+                        styles.filterButton,
+                        {
+                          backgroundColor: active
+                            ? colors.primary
+                            : colors.surfaceSecondary,
+                        },
+                      ]}
+                      onPress={() =>
+                        setTypeFilter(value as TransactionTypeFilter)
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.filterButtonText,
+                          { color: active ? '#FFFFFF' : colors.text },
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
-              <Text style={styles.filterLabel}>Categoria</Text>
+              <Text style={[styles.filterLabel, { color: colors.text }]}>
+                Categoria
+              </Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -410,14 +476,22 @@ export default function HomeScreen() {
                       key={category}
                       style={[
                         styles.categoryChip,
-                        isActive && styles.categoryChipActive,
+                        {
+                          backgroundColor: isActive
+                            ? colors.drawerActiveBg
+                            : colors.surfaceSecondary,
+                        },
                       ]}
                       onPress={() => setCategoryFilter(category)}
                     >
                       <Text
                         style={[
                           styles.categoryChipText,
-                          isActive && styles.categoryChipTextActive,
+                          {
+                            color: isActive
+                              ? colors.drawerActiveText
+                              : colors.text,
+                          },
                         ]}
                       >
                         {category}
@@ -428,11 +502,13 @@ export default function HomeScreen() {
               </ScrollView>
             </View>
 
-            <Text style={styles.listTitle}>Transações filtradas</Text>
+            <Text style={[styles.listTitle, { color: colors.text }]}>
+              Transações filtradas
+            </Text>
           </>
         }
         ListEmptyComponent={
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>
             Nenhuma transação encontrada para os filtros selecionados.
           </Text>
         }
@@ -444,13 +520,11 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FB',
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F7FB',
   },
   loadingText: {
     marginTop: 12,
@@ -458,72 +532,58 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingBottom: 24,
+    paddingBottom: 28,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginTop: 12,
-    color: '#1F2937',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 12,
-  },
-  logoutButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#E5E7EB',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
+  userCard: {
+    padding: 16,
+    borderRadius: 18,
     marginBottom: 16,
+    borderWidth: 1,
   },
-  logoutButtonText: {
-    color: '#111827',
+  userGreeting: {
+    fontSize: 18,
     fontWeight: '700',
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 14,
   },
   summaryCard: {
-    backgroundColor: '#FFFFFF',
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 18,
     marginBottom: 16,
+    borderWidth: 1,
   },
   summaryTitle: {
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 12,
-    color: '#111827',
   },
   summaryItem: {
     fontSize: 15,
     marginBottom: 6,
-    color: '#374151',
   },
   formCard: {
-    backgroundColor: '#FFFFFF',
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 18,
     marginBottom: 16,
+    borderWidth: 1,
   },
   formTitle: {
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 12,
-    color: '#111827',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     marginBottom: 12,
+    fontSize: 15,
   },
   button: {
-    backgroundColor: '#2563EB',
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
   },
@@ -536,21 +596,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   filtersCard: {
-    backgroundColor: '#FFFFFF',
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 18,
     marginBottom: 16,
+    borderWidth: 1,
   },
   filtersTitle: {
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 12,
-    color: '#111827',
   },
   filterLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#374151',
     marginBottom: 8,
     marginTop: 4,
   },
@@ -561,53 +619,36 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   filterButton: {
-    backgroundColor: '#E5E7EB',
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  filterButtonActive: {
-    backgroundColor: '#2563EB',
-  },
   filterButtonText: {
-    color: '#111827',
     fontWeight: '600',
-  },
-  filterButtonTextActive: {
-    color: '#FFFFFF',
   },
   categoriesRow: {
     paddingVertical: 4,
     gap: 8,
   },
   categoryChip: {
-    backgroundColor: '#E5E7EB',
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginRight: 8,
   },
-  categoryChipActive: {
-    backgroundColor: '#111827',
-  },
   categoryChipText: {
-    color: '#111827',
     fontWeight: '600',
-  },
-  categoryChipTextActive: {
-    color: '#FFFFFF',
   },
   listTitle: {
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 12,
-    color: '#111827',
   },
   transactionCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 14,
-    borderRadius: 14,
+    padding: 15,
+    borderRadius: 18,
     marginBottom: 12,
+    borderWidth: 1,
   },
   transactionHeader: {
     flexDirection: 'row',
@@ -618,7 +659,6 @@ const styles = StyleSheet.create({
   transactionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111827',
     flex: 1,
     textTransform: 'capitalize',
   },
@@ -626,15 +666,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  income: {
-    color: '#059669',
-  },
-  expense: {
-    color: '#DC2626',
-  },
   transactionMeta: {
     fontSize: 13,
-    color: '#6B7280',
     marginBottom: 2,
   },
   actionsRow: {
@@ -644,45 +677,24 @@ const styles = StyleSheet.create({
   },
   editButton: {
     flex: 1,
-    backgroundColor: '#E5E7EB',
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
   },
   editButtonText: {
-    color: '#111827',
     fontWeight: '700',
   },
   deleteButton: {
     flex: 1,
-    backgroundColor: '#FEE2E2',
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
   },
   deleteButtonText: {
-    color: '#B91C1C',
     fontWeight: '700',
   },
   emptyText: {
     textAlign: 'center',
-    color: '#6B7280',
     marginTop: 20,
-  },
-  userCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 16,
-  },
-  userGreeting: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 14,
-    color: '#6B7280',
   },
 });
