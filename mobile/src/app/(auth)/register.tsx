@@ -1,19 +1,22 @@
 import { useState } from 'react';
 import {
   Alert,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 import { api } from '../../services/api';
 import { saveToken } from '../../services/authStorage';
+import { useAppTheme } from '../../hooks/useAppTheme';
 
 export default function RegisterScreen() {
+  const { colors } = useAppTheme();
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -51,20 +54,50 @@ export default function RegisterScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Criar conta</Text>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      edges={['top', 'bottom']}
+    >
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <Text style={[styles.title, { color: colors.text }]}>Criar conta</Text>
+        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+          Comece a usar o Sentinela.
+        </Text>
 
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.inputBackground,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
           placeholder="Nome"
+          placeholderTextColor={colors.textMuted}
           value={name}
           onChangeText={setName}
         />
 
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.inputBackground,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
           placeholder="Email"
+          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           keyboardType="email-address"
           value={email}
@@ -72,15 +105,27 @@ export default function RegisterScreen() {
         />
 
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.inputBackground,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
           placeholder="Senha"
+          placeholderTextColor={colors.textMuted}
           secureTextEntry
           value={password}
           onChangeText={setPassword}
         />
 
         <TouchableOpacity
-          style={[styles.button, submitting && styles.buttonDisabled]}
+          style={[
+            styles.button,
+            { backgroundColor: colors.primary },
+            submitting && styles.buttonDisabled,
+          ]}
           onPress={handleRegister}
           disabled={submitting}
         >
@@ -90,7 +135,9 @@ export default function RegisterScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => router.push('/login')}>
-          <Text style={styles.link}>Já tenho conta</Text>
+          <Text style={[styles.link, { color: colors.primary }]}>
+            Já tenho conta
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -100,33 +147,33 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FB',
     justifyContent: 'center',
     padding: 16,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 16,
+    padding: 18,
+    borderRadius: 20,
+    borderWidth: 1,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 16,
+    marginBottom: 6,
+  },
+  subtitle: {
+    fontSize: 14,
+    marginBottom: 18,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     marginBottom: 12,
+    fontSize: 15,
   },
   button: {
-    backgroundColor: '#2563EB',
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 4,
@@ -142,7 +189,6 @@ const styles = StyleSheet.create({
   link: {
     marginTop: 16,
     textAlign: 'center',
-    color: '#2563EB',
     fontWeight: '600',
   },
 });
