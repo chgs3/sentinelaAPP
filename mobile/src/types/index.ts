@@ -36,8 +36,6 @@ export type ParsedTransaction = {
   possibleTransfer?: boolean;
 };
 
-export type ParseStatus = 'created' | 'needs_confirmation' | 'unable_to_parse';
-
 export type ParseMessageResponse =
   | {
       status: 'created';
@@ -54,6 +52,12 @@ export type ParseMessageResponse =
     }
   | {
       status: 'unable_to_parse';
+      message: string;
+      ambiguities: string[];
+      parsed?: ParsedTransaction;
+    }
+  | {
+      status: 'ignored_transfer';
       message: string;
       ambiguities: string[];
       parsed?: ParsedTransaction;

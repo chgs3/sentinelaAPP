@@ -2,85 +2,55 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api } from '../../../services/api';
+import { useAppTheme } from '../../../hooks/useAppTheme';
+import { formatPaymentMethod } from '../../../utils/formatters';
 import type { Transaction } from '../../../types';
 
 export default function TransactionDetailsScreen() {
+  const { colors } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
 
   async function loadTransaction() {
     try {
       setLoading(true);
 
       const response = await api.get<Transaction[]>('/transactions');
-      const foundTransaction = response.data.find(
-        (item) => item.id === Number(id)
-      );
+      const found = response.data.find((item) => item.id === Number(id));
 
-      if (!foundTransaction) {
+      if (!found) {
         Alert.alert('Erro', 'Transação não encontrada.');
-        router.back();
         return;
       }
 
-      setTransaction(foundTransaction);
-    } catch (error) {
+      setTransaction(found);
+    } catch (error: any) {
       console.error(error);
-      Alert.alert('Erro', 'Não foi possível carregar a transação.');
-      router.back();
+
+      const apiMessage =
+        error?.response?.data?.message ??
+        'Não foi possível carregar os detalhes da transação.';
+
+      Alert.alert('Erro', apiMessage);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleDelete() {
-    try {
-      setDeleting(true);
-
-      await api.delete(`/transactions/${id}`);
-      Alert.alert('Sucesso', 'Transação excluída com sucesso.');
-      router.back();
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Erro', 'Não foi possível excluir a transação.');
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  function confirmDelete() {
-    Alert.alert(
-      'Excluir transação',
-      'Tem certeza que deseja excluir esta transação?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: handleDelete,
-        },
-      ]
-    );
-  }
-
-  function goToEdit() {
-    router.push({
-      pathname: '/edit/[id]' as const,
-      params: { id: String(id) },
-    });
-  }
+  useEffect(() => {
+    loadTransaction();
+  }, []);
 
   function formatCurrency(value: number) {
     return value.toLocaleString('pt-BR', {
@@ -89,73 +59,111 @@ export default function TransactionDetailsScreen() {
     });
   }
 
-  useEffect(() => {
-    loadTransaction();
-  }, []);
-
   if (loading) {
     return (
-      <SafeAreaView style={styles.centered}>
+      <SafeAreaView
+        style={[styles.centered, { backgroundColor: colors.background }]}
+      >
         <ActivityIndicator size="large" />
-        <Text style={styles.loadingText}>Carregando transação...</Text>
+        <Text style={[styles.loadingText, { color: colors.textMuted }]}>
+          Carregando detalhes...
+        </Text>
       </SafeAreaView>
     );
   }
 
   if (!transaction) {
-    return null;
+    return (
+      <SafeAreaView
+        style={[styles.centered, { backgroundColor: colors.background }]}
+      >
+        <Text style={[styles.loadingText, { color: colors.textMuted }]}>
+          Transação não encontrada.
+        </Text>
+      </SafeAreaView>
+    );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Detalhes da transação</Text>
-
-      <View style={styles.card}>
-        <Text style={styles.label}>Descrição</Text>
-        <Text style={styles.value}>{transaction.description}</Text>
-
-        <Text style={styles.label}>Tipo</Text>
-        <Text style={styles.value}>
-          {transaction.type === 'income' ? 'Receita' : 'Despesa'}
-        </Text>
-
-        <Text style={styles.label}>Valor</Text>
-        <Text style={styles.value}>{formatCurrency(transaction.amount)}</Text>
-
-        <Text style={styles.label}>Categoria</Text>
-        <Text style={styles.value}>{transaction.category}</Text>
-
-        <Text style={styles.label}>Data</Text>
-        <Text style={styles.value}>
-          {new Date(transaction.transactionAt).toLocaleDateString('pt-BR')}
-        </Text>
-
-        <Text style={styles.label}>Pagamento</Text>
-        <Text style={styles.value}>
-          {transaction.paymentMethod ?? 'Não informado'}
-        </Text>
-
-        <Text style={styles.label}>Conta/Cartão</Text>
-        <Text style={styles.value}>
-          {transaction.accountOrCard ?? 'Não informado'}
-        </Text>
-      </View>
-
-      <View style={styles.actionsRow}>
-        <TouchableOpacity style={styles.editButton} onPress={goToEdit}>
-          <Text style={styles.editButtonText}>Editar</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={confirmDelete}
-          disabled={deleting}
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      edges={['bottom']}
+    >
+      <ScrollView contentContainerStyle={styles.content}>
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
+          ]}
         >
-          <Text style={styles.deleteButtonText}>
-            {deleting ? 'Excluindo...' : 'Excluir'}
+          <Text style={[styles.title, { color: colors.text }]}>
+            {transaction.description}
           </Text>
-        </TouchableOpacity>
-      </View>
+
+          <Text
+            style={[
+              styles.amount,
+              {
+                color:
+                  transaction.type === 'income'
+                    ? colors.success
+                    : colors.danger,
+              },
+            ]}
+          >
+            {transaction.type === 'income' ? '+' : '-'}{' '}
+            {formatCurrency(transaction.amount)}
+          </Text>
+
+          <View style={styles.infoGroup}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>
+              Tipo
+            </Text>
+            <Text style={[styles.value, { color: colors.text }]}>
+              {transaction.type === 'income' ? 'Receita' : 'Despesa'}
+            </Text>
+          </View>
+
+          <View style={styles.infoGroup}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>
+              Categoria
+            </Text>
+            <Text style={[styles.value, { color: colors.text }]}>
+              {transaction.category}
+            </Text>
+          </View>
+
+          <View style={styles.infoGroup}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>
+              Data
+            </Text>
+            <Text style={[styles.value, { color: colors.text }]}>
+              {new Date(transaction.transactionAt).toLocaleDateString('pt-BR')}
+            </Text>
+          </View>
+
+          <View style={styles.infoGroup}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>
+              Pagamento
+            </Text>
+            <Text style={[styles.value, { color: colors.text }]}>
+              {formatPaymentMethod(transaction.paymentMethod)}
+            </Text>
+          </View>
+
+          <View style={styles.infoGroup}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>
+              Conta/Cartão
+            </Text>
+            <Text style={[styles.value, { color: colors.text }]}>
+              {transaction.accountOrCard ?? 'Não informado'}
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -163,67 +171,44 @@ export default function TransactionDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FB',
+  },
+  content: {
     padding: 16,
+    paddingBottom: 28,
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F7FB',
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
   },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#111827',
-    marginTop: 12,
-    marginBottom: 16,
-  },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 18,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  amount: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 18,
+  },
+  infoGroup: {
+    marginBottom: 14,
   },
   label: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#6B7280',
-    marginTop: 10,
     marginBottom: 4,
   },
   value: {
     fontSize: 16,
-    color: '#111827',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  editButton: {
-    flex: 1,
-    backgroundColor: '#E5E7EB',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  editButtonText: {
-    color: '#111827',
-    fontWeight: '700',
-  },
-  deleteButton: {
-    flex: 1,
-    backgroundColor: '#FEE2E2',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  deleteButtonText: {
-    color: '#B91C1C',
-    fontWeight: '700',
   },
 });

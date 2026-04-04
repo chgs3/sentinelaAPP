@@ -1,10 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
-import {
-  createTransactionSchema,
-  updateTransactionSchema,
-} from '../schemas/transactionSchemas';
 import { getZodErrorMessage } from '../utils/zodError';
+import { periodQuerySchema } from '../schemas/periodSchemas';
 
 class TransactionController {
   async create(req: Request, res: Response) {
@@ -12,17 +9,7 @@ class TransactionController {
       const userId = req.userId;
 
       if (!userId) {
-        return res.status(401).json({
-          message: 'Usuário não autenticado.',
-        });
-      }
-
-      const parsedBody = createTransactionSchema.safeParse(req.body);
-
-      if (!parsedBody.success) {
-        return res.status(400).json({
-          message: getZodErrorMessage(parsedBody.error),
-        });
+        return res.status(401).json({ message: 'Usuário não autenticado.' });
       }
 
       const {
@@ -33,14 +20,12 @@ class TransactionController {
         transactionAt,
         paymentMethod,
         accountOrCard,
-      } = parsedBody.data;
+      } = req.body;
 
       const parsedDate = new Date(transactionAt);
 
       if (Number.isNaN(parsedDate.getTime())) {
-        return res.status(400).json({
-          message: 'transactionAt inválido.',
-        });
+        return res.status(400).json({ message: 'Data inválida.' });
       }
 
       const transaction = await prisma.transaction.create({
@@ -59,7 +44,9 @@ class TransactionController {
       return res.status(201).json(transaction);
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: 'Erro ao criar transação' });
+      return res.status(500).json({
+        message: 'Erro ao criar transação.',
+      });
     }
   }
 
@@ -68,13 +55,45 @@ class TransactionController {
       const userId = req.userId;
 
       if (!userId) {
-        return res.status(401).json({
-          message: 'Usuário não autenticado.',
-        });
+        return res.status(401).json({ message: 'Usuário não autenticado.' });
+      }
+
+      const hasPeriodFilter =
+        typeof req.query.startDate === 'string' &&
+        typeof req.query.endDate === 'string';
+
+      let whereClause: any = {
+        userId,
+      };
+
+      if (hasPeriodFilter) {
+        const parsedQuery = periodQuerySchema.safeParse(req.query);
+
+        if (!parsedQuery.success) {
+          return res.status(400).json({
+            message: getZodErrorMessage(parsedQuery.error),
+          });
+        }
+
+        const { startDate, endDate } = parsedQuery.data;
+
+        const start = new Date(`${startDate}T00:00:00.000Z`);
+        const end = new Date(`${endDate}T23:59:59.999Z`);
+
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+          return res.status(400).json({
+            message: 'Período inválido.',
+          });
+        }
+
+        whereClause.transactionAt = {
+          gte: start,
+          lte: end,
+        };
       }
 
       const transactions = await prisma.transaction.findMany({
-        where: { userId },
+        where: whereClause,
         orderBy: {
           transactionAt: 'desc',
         },
@@ -83,34 +102,31 @@ class TransactionController {
       return res.status(200).json(transactions);
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: 'Erro ao listar transações' });
+      return res.status(500).json({
+        message: 'Erro ao listar transações.',
+      });
     }
   }
 
   async update(req: Request, res: Response) {
     try {
       const userId = req.userId;
+      const { id } = req.params;
 
       if (!userId) {
-        return res.status(401).json({
-          message: 'Usuário não autenticado.',
-        });
+        return res.status(401).json({ message: 'Usuário não autenticado.' });
       }
 
-      const { id } = req.params;
-      const transactionId = Number(id);
+      const existingTransaction = await prisma.transaction.findFirst({
+        where: {
+          id: Number(id),
+          userId,
+        },
+      });
 
-      if (Number.isNaN(transactionId)) {
-        return res.status(400).json({
-          message: 'ID inválido.',
-        });
-      }
-
-      const parsedBody = updateTransactionSchema.safeParse(req.body);
-
-      if (!parsedBody.success) {
-        return res.status(400).json({
-          message: getZodErrorMessage(parsedBody.error),
+      if (!existingTransaction) {
+        return res.status(404).json({
+          message: 'Transação não encontrada.',
         });
       }
 
@@ -122,77 +138,50 @@ class TransactionController {
         transactionAt,
         paymentMethod,
         accountOrCard,
-      } = parsedBody.data;
+      } = req.body;
 
-      const existingTransaction = await prisma.transaction.findFirst({
+      const parsedDate = new Date(transactionAt);
+
+      if (Number.isNaN(parsedDate.getTime())) {
+        return res.status(400).json({ message: 'Data inválida.' });
+      }
+
+      const transaction = await prisma.transaction.update({
         where: {
-          id: transactionId,
-          userId,
+          id: Number(id),
         },
-      });
-
-      if (!existingTransaction) {
-        return res.status(404).json({
-          message: 'Transação não encontrada.',
-        });
-      }
-
-      let parsedDate = existingTransaction.transactionAt;
-
-      if (transactionAt !== undefined) {
-        const newDate = new Date(transactionAt);
-
-        if (Number.isNaN(newDate.getTime())) {
-          return res.status(400).json({
-            message: 'transactionAt inválido.',
-          });
-        }
-
-        parsedDate = newDate;
-      }
-
-      const updatedTransaction = await prisma.transaction.update({
-        where: { id: transactionId },
         data: {
-          type: type ?? existingTransaction.type,
-          amount: amount ?? existingTransaction.amount,
-          description: description ?? existingTransaction.description,
-          category: category ?? existingTransaction.category,
+          type,
+          amount,
+          description,
+          category,
           transactionAt: parsedDate,
-          paymentMethod: paymentMethod ?? existingTransaction.paymentMethod,
-          accountOrCard: accountOrCard ?? existingTransaction.accountOrCard,
+          paymentMethod: paymentMethod ?? null,
+          accountOrCard: accountOrCard ?? null,
         },
       });
 
-      return res.status(200).json(updatedTransaction);
+      return res.status(200).json(transaction);
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: 'Erro ao atualizar transação' });
+      return res.status(500).json({
+        message: 'Erro ao atualizar transação.',
+      });
     }
   }
 
   async delete(req: Request, res: Response) {
     try {
       const userId = req.userId;
+      const { id } = req.params;
 
       if (!userId) {
-        return res.status(401).json({
-          message: 'Usuário não autenticado.',
-        });
-      }
-
-      const { id } = req.params;
-      const transactionId = Number(id);
-
-      if (Number.isNaN(transactionId)) {
-        return res.status(400).json({
-          message: 'ID inválido.',
-        });
+        return res.status(401).json({ message: 'Usuário não autenticado.' });
       }
 
       const existingTransaction = await prisma.transaction.findFirst({
         where: {
-          id: transactionId,
+          id: Number(id),
           userId,
         },
       });
@@ -204,7 +193,9 @@ class TransactionController {
       }
 
       await prisma.transaction.delete({
-        where: { id: transactionId },
+        where: {
+          id: Number(id),
+        },
       });
 
       return res.status(200).json({
@@ -212,7 +203,9 @@ class TransactionController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: 'Erro ao remover transação' });
+      return res.status(500).json({
+        message: 'Erro ao remover transação.',
+      });
     }
   }
 }
