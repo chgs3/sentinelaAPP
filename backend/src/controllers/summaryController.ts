@@ -1,8 +1,10 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
+import { getZodErrorMessage } from '../utils/zodError';
+import { periodQuerySchema } from '../schemas/periodSchemas';
 
 class SummaryController {
-  async monthly(req: Request, res: Response) {
+  async getPeriodSummary(req: Request, res: Response) {
     try {
       const userId = req.userId;
 
@@ -12,49 +14,55 @@ class SummaryController {
         });
       }
 
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const parsedQuery = periodQuerySchema.safeParse(req.query);
+
+      if (!parsedQuery.success) {
+        return res.status(400).json({
+          message: getZodErrorMessage(parsedQuery.error),
+        });
+      }
+
+      const { startDate, endDate } = parsedQuery.data;
+
+      const start = new Date(`${startDate}T00:00:00.000Z`);
+      const end = new Date(`${endDate}T23:59:59.999Z`);
+
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        return res.status(400).json({
+          message: 'Período inválido.',
+        });
+      }
 
       const transactions = await prisma.transaction.findMany({
         where: {
           userId,
           transactionAt: {
-            gte: startOfMonth,
-            lt: startOfNextMonth,
+            gte: start,
+            lte: end,
           },
         },
       });
 
-      const expenses = transactions.filter(
-        (transaction) => transaction.type === 'expense'
-      );
-      const incomes = transactions.filter(
-        (transaction) => transaction.type === 'income'
-      );
+      const totalIncomes = transactions
+        .filter((transaction) => transaction.type === 'income')
+        .reduce((sum, transaction) => sum + transaction.amount, 0);
 
-      const totalExpenses = expenses.reduce(
-        (sum, transaction) => sum + transaction.amount,
-        0
-      );
+      const totalExpenses = transactions
+        .filter((transaction) => transaction.type === 'expense')
+        .reduce((sum, transaction) => sum + transaction.amount, 0);
 
-      const totalIncomes = incomes.reduce(
-        (sum, transaction) => sum + transaction.amount,
-        0
-      );
+      const balance = totalIncomes - totalExpenses;
 
       return res.status(200).json({
-        month: now.getMonth() + 1,
-        year: now.getFullYear(),
-        totalTransactions: transactions.length,
-        totalExpenses,
         totalIncomes,
-        balance: totalIncomes - totalExpenses,
+        totalExpenses,
+        balance,
+        totalTransactions: transactions.length,
       });
     } catch (error) {
       console.error(error);
       return res.status(500).json({
-        message: 'Erro ao gerar resumo mensal.',
+        message: 'Erro ao gerar resumo do período.',
       });
     }
   }

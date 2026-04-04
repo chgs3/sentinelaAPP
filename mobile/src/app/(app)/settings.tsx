@@ -1,5 +1,5 @@
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme } from '../../hooks/useAppTheme';
@@ -10,198 +10,209 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
+      edges={['bottom']}
     >
-      <Text style={[styles.title, { color: colors.text }]}>Configurações</Text>
-      <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-        Personalize o Sentinela do seu jeito.
-      </Text>
-
-      <View
-        style={[
-          styles.sectionCard,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-          },
-        ]}
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.sectionHeader}>
-          <View
-            style={[
-              styles.sectionIcon,
-              { backgroundColor: colors.primarySoft },
-            ]}
-          >
-            <Ionicons name="color-palette-outline" size={18} color={colors.primary} />
-          </View>
+        <Text style={[styles.title, { color: colors.text }]}>Configurações</Text>
+        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+          Personalize o Sentinela do seu jeito.
+        </Text>
 
-          <View style={styles.sectionHeaderText}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Aparência
-            </Text>
-            <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>
-              Ajuste o visual do app.
-            </Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
+        <View
           style={[
-            styles.settingButton,
-            { backgroundColor: colors.surfaceSecondary },
+            styles.sectionCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
           ]}
-          onPress={toggleThemeMode}
         >
-          <View style={styles.settingLeft}>
+          <View style={styles.sectionHeader}>
             <View
               style={[
-                styles.settingIcon,
+                styles.sectionIcon,
                 { backgroundColor: colors.primarySoft },
               ]}
             >
               <Ionicons
-                name={mode === 'dark' ? 'moon' : 'sunny'}
+                name="color-palette-outline"
                 size={18}
                 color={colors.primary}
               />
             </View>
 
-            <View style={styles.settingTextBlock}>
-              <Text style={[styles.settingLabel, { color: colors.text }]}>
-                Tema do app
+            <View style={styles.sectionHeaderText}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Aparência
               </Text>
-              <Text
+              <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>
+                Ajuste o visual do app.
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.settingButton,
+              { backgroundColor: colors.surfaceSecondary },
+            ]}
+            onPress={toggleThemeMode}
+            activeOpacity={0.85}
+          >
+            <View style={styles.settingLeft}>
+              <View
                 style={[
-                  styles.settingDescriptionText,
-                  { color: colors.textMuted },
+                  styles.settingIcon,
+                  { backgroundColor: colors.primarySoft },
                 ]}
               >
-                Alterne entre modo escuro e claro.
+                <Ionicons
+                  name={mode === 'dark' ? 'moon' : 'sunny'}
+                  size={18}
+                  color={colors.primary}
+                />
+              </View>
+
+              <View style={styles.settingTextBlock}>
+                <Text style={[styles.settingLabel, { color: colors.text }]}>
+                  Tema do app
+                </Text>
+                <Text
+                  style={[
+                    styles.settingDescriptionText,
+                    { color: colors.textMuted },
+                  ]}
+                >
+                  Alterne entre modo escuro e claro.
+                </Text>
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.valueBadge,
+                { backgroundColor: colors.surface },
+              ]}
+            >
+              <Text style={[styles.settingValue, { color: colors.primary }]}>
+                {mode === 'dark' ? 'Escuro' : 'Claro'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <View
+          style={[
+            styles.sectionCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <View style={styles.sectionHeader}>
+            <View
+              style={[
+                styles.sectionIcon,
+                { backgroundColor: colors.primarySoft },
+              ]}
+            >
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={18}
+                color={colors.primary}
+              />
+            </View>
+
+            <View style={styles.sectionHeaderText}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Aplicativo
+              </Text>
+              <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>
+                Informações do Sentinela.
               </Text>
             </View>
           </View>
 
           <View
             style={[
-              styles.valueBadge,
-              { backgroundColor: colors.surface },
+              styles.infoRow,
+              { borderBottomColor: colors.border },
             ]}
           >
-            <Text style={[styles.settingValue, { color: colors.primary }]}>
-              {mode === 'dark' ? 'Escuro' : 'Claro'}
+            <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
+              Nome
+            </Text>
+            <Text style={[styles.infoValue, { color: colors.text }]}>
+              Sentinela
             </Text>
           </View>
-        </TouchableOpacity>
-      </View>
 
-      <View
-        style={[
-          styles.sectionCard,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        <View style={styles.sectionHeader}>
           <View
             style={[
-              styles.sectionIcon,
-              { backgroundColor: colors.primarySoft },
+              styles.infoRow,
+              { borderBottomColor: colors.border },
             ]}
           >
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={18}
-              color={colors.primary}
-            />
+            <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
+              Versão
+            </Text>
+            <Text style={[styles.infoValue, { color: colors.text }]}>
+              1.0.0
+            </Text>
           </View>
 
-          <View style={styles.sectionHeaderText}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Aplicativo
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
+              Registro
             </Text>
-            <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>
-              Informações do Sentinela.
+            <Text style={[styles.infoValue, { color: colors.text }]}>
+              Somente por mensagem
             </Text>
           </View>
         </View>
 
         <View
           style={[
-            styles.infoRow,
-            { borderBottomColor: colors.border },
+            styles.sectionCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
           ]}
         >
-          <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
-            Nome
-          </Text>
-          <Text style={[styles.infoValue, { color: colors.text }]}>
-            Sentinela
-          </Text>
-        </View>
+          <View style={styles.sectionHeader}>
+            <View
+              style={[
+                styles.sectionIcon,
+                { backgroundColor: colors.primarySoft },
+              ]}
+            >
+              <Ionicons
+                name="sparkles-outline"
+                size={18}
+                color={colors.primary}
+              />
+            </View>
 
-        <View
-          style={[
-            styles.infoRow,
-            { borderBottomColor: colors.border },
-          ]}
-        >
-          <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
-            Versão
-          </Text>
-          <Text style={[styles.infoValue, { color: colors.text }]}>
-            1.0.0
-          </Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
-            Registro
-          </Text>
-          <Text style={[styles.infoValue, { color: colors.text }]}>
-            Somente por mensagem
-          </Text>
-        </View>
-      </View>
-
-      <View
-        style={[
-          styles.sectionCard,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        <View style={styles.sectionHeader}>
-          <View
-            style={[
-              styles.sectionIcon,
-              { backgroundColor: colors.primarySoft },
-            ]}
-          >
-            <Ionicons
-              name="sparkles-outline"
-              size={18}
-              color={colors.primary}
-            />
+            <View style={styles.sectionHeaderText}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Futuras preferências
+              </Text>
+              <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>
+                Espaço reservado para novas opções do app.
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.sectionHeaderText}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Futuras preferências
-            </Text>
-            <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>
-              Espaço reservado para novas opções do app.
-            </Text>
-          </View>
+          <Text style={[styles.placeholderText, { color: colors.textMuted }]}>
+            Em breve você poderá configurar preferências do parser, comportamento do registro e outras personalizações do Sentinela.
+          </Text>
         </View>
-
-        <Text style={[styles.placeholderText, { color: colors.textMuted }]}>
-          Em breve você poderá configurar preferências do parser, comportamento do registro e outras personalizações do Sentinela.
-        </Text>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -209,7 +220,10 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  content: {
     padding: 16,
+    paddingBottom: 28,
   },
   title: {
     fontSize: 30,
@@ -253,6 +267,7 @@ const styles = StyleSheet.create({
   },
   settingButton: {
     borderRadius: 14,
+    minHeight: 72,
     padding: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -283,13 +298,18 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   valueBadge: {
+    minWidth: 96,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
   },
   settingValue: {
     fontSize: 14,
     fontWeight: '700',
+    textAlign: 'center',
   },
   infoRow: {
     paddingVertical: 12,

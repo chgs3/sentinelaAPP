@@ -59,11 +59,13 @@ export default function EditProfileScreen() {
     }
   }
 
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
   if (loading) {
     return (
-      <SafeAreaView
-        style={[styles.centered, { backgroundColor: colors.background }]}
-      >
+      <SafeAreaView style={[styles.centered, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" />
         <Text style={[styles.loadingText, { color: colors.textMuted }]}>
           Carregando perfil...
@@ -73,9 +75,7 @@ export default function EditProfileScreen() {
   }
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.background }]}
-    >
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <Text style={[styles.title, { color: colors.text }]}>
         Editar perfil
       </Text>
