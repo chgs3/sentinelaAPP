@@ -1,0 +1,601 @@
+import { Request, Response } from 'express';
+import prisma from '../config/prisma';
+import {
+  createDebtSchema,
+  updateDebtSchema,
+  updateDebtStatusSchema,
+} from '../schemas/debtSchemas';
+import { parseDebtMessageSchema } from '../schemas/debtMessageSchemas';
+import { settleDebtMessageSchema } from '../schemas/debtSettleMessageSchemas';
+import { getZodErrorMessage } from '../utils/zodError';
+import parseDebtMessageService from '../services/parseDebtMessageService';
+import settleDebtMessageService from '../services/settleDebtMessageService';
+
+function normalizeText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function isSameOrContainedPersonName(a: string, b: string) {
+  const na = normalizeText(a);
+  const nb = normalizeText(b);
+
+  if (na === nb) return true;
+  if (na.includes(nb) || nb.includes(na)) return true;
+
+  const tokensA = na.split(' ').filter(Boolean);
+  const tokensB = nb.split(' ').filter(Boolean);
+
+  return tokensA.some((tokenA) => tokensB.includes(tokenA));
+}
+
+function countNameTokens(name: string) {
+  return normalizeText(name).split(' ').filter(Boolean).length;
+}
+
+function buildNeedsConfirmationResponse(message: string, ambiguities: string[]) {
+  return {
+    status: 'needs_confirmation',
+    message,
+    ambiguities,
+  };
+}
+
+class DebtController {
+  async create(req: Request, res: Response) {
+    try {
+      const userId = req.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
+      const parsedBody = createDebtSchema.safeParse(req.body);
+
+      if (!parsedBody.success) {
+        return res.status(400).json({
+          message: getZodErrorMessage(parsedBody.error),
+        });
+      }
+
+      const { personName, type, amount, description, status, dueDate } =
+        parsedBody.data;
+
+      const debt = await prisma.debt.create({
+        data: {
+          personName,
+          type,
+          amount,
+          description,
+          status: status ?? 'pending',
+          dueDate: dueDate ? new Date(dueDate) : null,
+          userId,
+        },
+      });
+
+      return res.status(201).json(debt);
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({
+        message: 'Erro ao criar dívida.',
+      });
+    }
+  }
+
+  async createFromMessage(req: Request, res: Response) {
+    try {
+      const userId = req.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
+      const parsedBody = parseDebtMessageSchema.safeParse(req.body);
+
+      if (!parsedBody.success) {
+        return res.status(400).json({
+          message: getZodErrorMessage(parsedBody.error),
+        });
+      }
+
+      const { message } = parsedBody.data;
+      const parsed = parseDebtMessageService.execute(message);
+
+      if (!parsed) {
+        return res.status(200).json({
+          status: 'unable_to_parse',
+          message: 'Não foi possível interpretar a dívida pela mensagem.',
+        });
+      }
+
+      if (countNameTokens(parsed.personName) === 1 && parsed.personName.length <= 2) {
+        return res.status(200).json(
+          buildNeedsConfirmationResponse(
+            'A mensagem parece incompleta para registrar a dívida.',
+            ['Nome da pessoa muito curto ou ambíguo.']
+          )
+        );
+      }
+
+      const debt = await prisma.debt.create({
+        data: {
+          personName: parsed.personName,
+          type: parsed.type,
+          amount: parsed.amount,
+          description: parsed.description,
+          status: 'pending',
+          dueDate: null,
+          userId,
+        },
+      });
+
+      return res.status(201).json({
+        status: 'created',
+        message: 'Dívida registrada com sucesso.',
+        debt,
+      });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({
+        message: 'Erro ao registrar dívida por mensagem.',
+      });
+    }
+  }
+
+  async settleFromMessage(req: Request, res: Response) {
+    try {
+      const userId = req.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
+      const parsedBody = settleDebtMessageSchema.safeParse(req.body);
+
+      if (!parsedBody.success) {
+        return res.status(400).json({
+          message: getZodErrorMessage(parsedBody.error),
+        });
+      }
+
+      const { message } = parsedBody.data;
+      const parsed = settleDebtMessageService.execute(message);
+
+      if (!parsed) {
+        return res.status(200).json({
+          status: 'unable_to_parse',
+          message:
+            'Não foi possível interpretar a baixa da dívida pela mensagem.',
+        });
+      }
+
+      if (countNameTokens(parsed.personName) === 1 && parsed.personName.length <= 2) {
+        return res.status(200).json(
+          buildNeedsConfirmationResponse(
+            'A mensagem parece incompleta para dar baixa na dívida.',
+            ['Nome da pessoa muito curto ou ambíguo.']
+          )
+        );
+      }
+
+      const pendingDebts = await prisma.debt.findMany({
+        where: {
+          userId,
+          status: 'pending',
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      const matchingDebts = pendingDebts.filter((debt) => {
+        const samePerson = isSameOrContainedPersonName(
+          debt.personName,
+          parsed.personName
+        );
+
+        if (!samePerson) return false;
+
+        if (parsed.targetStatus === 'received') {
+          return debt.type === 'to_receive';
+        }
+
+        return debt.type === 'to_pay';
+      });
+
+      if (matchingDebts.length === 0) {
+        return res.status(404).json({
+          status: 'not_found',
+          message:
+            'Nenhuma dívida pendente compatível foi encontrada para essa pessoa.',
+        });
+      }
+
+      if (matchingDebts.length > 1) {
+        return res.status(200).json(
+          buildNeedsConfirmationResponse(
+            'Encontrei mais de uma dívida pendente para essa pessoa.',
+            [
+              'Há múltiplas dívidas pendentes compatíveis.',
+              'Edite ou quite manualmente a dívida desejada.',
+            ]
+          )
+        );
+      }
+
+      const targetDebt = matchingDebts[0];
+
+      const updatedDebt = await prisma.debt.update({
+        where: {
+          id: targetDebt.id,
+        },
+        data: {
+          status: parsed.targetStatus,
+        },
+      });
+
+      return res.status(200).json({
+        status: 'settled',
+        message:
+          parsed.targetStatus === 'received'
+            ? 'Dívida marcada como recebida.'
+            : 'Dívida marcada como paga.',
+        debt: updatedDebt,
+      });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({
+        message: 'Erro ao dar baixa na dívida por mensagem.',
+      });
+    }
+  }
+
+  async handleMessage(req: Request, res: Response) {
+    try {
+      const userId = req.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
+      const parsedBody = parseDebtMessageSchema.safeParse(req.body);
+
+      if (!parsedBody.success) {
+        return res.status(400).json({
+          message: getZodErrorMessage(parsedBody.error),
+        });
+      }
+
+      const { message } = parsedBody.data;
+
+      const settleParsed = settleDebtMessageService.execute(message);
+
+      if (settleParsed) {
+        if (
+          countNameTokens(settleParsed.personName) === 1 &&
+          settleParsed.personName.length <= 2
+        ) {
+          return res.status(200).json(
+            buildNeedsConfirmationResponse(
+              'A mensagem parece incompleta para dar baixa na dívida.',
+              ['Nome da pessoa muito curto ou ambíguo.']
+            )
+          );
+        }
+
+        const pendingDebts = await prisma.debt.findMany({
+          where: {
+            userId,
+            status: 'pending',
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        });
+
+        const matchingDebts = pendingDebts.filter((debt) => {
+          const samePerson = isSameOrContainedPersonName(
+            debt.personName,
+            settleParsed.personName
+          );
+
+          if (!samePerson) return false;
+
+          if (settleParsed.targetStatus === 'received') {
+            return debt.type === 'to_receive';
+          }
+
+          return debt.type === 'to_pay';
+        });
+
+        if (matchingDebts.length === 0) {
+          return res.status(404).json({
+            status: 'not_found',
+            message:
+              'Nenhuma dívida pendente compatível foi encontrada para essa pessoa.',
+          });
+        }
+
+        if (matchingDebts.length > 1) {
+          return res.status(200).json(
+            buildNeedsConfirmationResponse(
+              'Encontrei mais de uma dívida pendente para essa pessoa.',
+              [
+                'Há múltiplas dívidas pendentes compatíveis.',
+                'Edite ou quite manualmente a dívida desejada.',
+              ]
+            )
+          );
+        }
+
+        const targetDebt = matchingDebts[0];
+
+        const updatedDebt = await prisma.debt.update({
+          where: {
+            id: targetDebt.id,
+          },
+          data: {
+            status: settleParsed.targetStatus,
+          },
+        });
+
+        return res.status(200).json({
+          status: 'settled',
+          message:
+            settleParsed.targetStatus === 'received'
+              ? 'Dívida marcada como recebida.'
+              : 'Dívida marcada como paga.',
+          debt: updatedDebt,
+        });
+      }
+
+      const createParsed = parseDebtMessageService.execute(message);
+
+      if (createParsed) {
+        const ambiguities: string[] = [];
+
+        if (
+          countNameTokens(createParsed.personName) === 1 &&
+          createParsed.personName.length <= 2
+        ) {
+          ambiguities.push('Nome da pessoa muito curto ou ambíguo.');
+        }
+
+        if (
+          createParsed.description === 'Dívida registrada' &&
+          normalizeText(message).includes('devo')
+        ) {
+          ambiguities.push('Descrição não foi identificada claramente.');
+        }
+
+        if (ambiguities.length > 0) {
+          return res.status(200).json(
+            buildNeedsConfirmationResponse(
+              'Consigo interpretar parte da mensagem, mas preciso de mais clareza.',
+              ambiguities
+            )
+          );
+        }
+
+        const debt = await prisma.debt.create({
+          data: {
+            personName: createParsed.personName,
+            type: createParsed.type,
+            amount: createParsed.amount,
+            description: createParsed.description,
+            status: 'pending',
+            dueDate: null,
+            userId,
+          },
+        });
+
+        return res.status(201).json({
+          status: 'created',
+          message: 'Dívida registrada com sucesso.',
+          debt,
+        });
+      }
+
+      return res.status(200).json({
+        status: 'unable_to_parse',
+        message: 'Não foi possível interpretar a mensagem.',
+      });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({
+        message: 'Erro ao processar a mensagem da dívida.',
+      });
+    }
+  }
+
+  async list(req: Request, res: Response) {
+    try {
+      const userId = req.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
+      const debts = await prisma.debt.findMany({
+        where: {
+          userId,
+        },
+        orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+      });
+
+      return res.status(200).json(debts);
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({
+        message: 'Erro ao listar dívidas.',
+      });
+    }
+  }
+
+  async update(req: Request, res: Response) {
+    try {
+      const userId = req.userId;
+      const { id } = req.params;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
+      const existingDebt = await prisma.debt.findFirst({
+        where: {
+          id: Number(id),
+          userId,
+        },
+      });
+
+      if (!existingDebt) {
+        return res.status(404).json({
+          message: 'Dívida não encontrada.',
+        });
+      }
+
+      const parsedBody = updateDebtSchema.safeParse(req.body);
+
+      if (!parsedBody.success) {
+        return res.status(400).json({
+          message: getZodErrorMessage(parsedBody.error),
+        });
+      }
+
+      const data = parsedBody.data;
+
+      const updatedDebt = await prisma.debt.update({
+        where: {
+          id: Number(id),
+        },
+        data: {
+          ...(data.personName !== undefined && { personName: data.personName }),
+          ...(data.type !== undefined && { type: data.type }),
+          ...(data.amount !== undefined && { amount: data.amount }),
+          ...(data.description !== undefined && {
+            description: data.description,
+          }),
+          ...(data.status !== undefined && { status: data.status }),
+          ...(data.dueDate !== undefined && {
+            dueDate: data.dueDate ? new Date(data.dueDate) : null,
+          }),
+        },
+      });
+
+      return res.status(200).json(updatedDebt);
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({
+        message: 'Erro ao atualizar dívida.',
+      });
+    }
+  }
+
+  async updateStatus(req: Request, res: Response) {
+    try {
+      const userId = req.userId;
+      const { id } = req.params;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
+      const existingDebt = await prisma.debt.findFirst({
+        where: {
+          id: Number(id),
+          userId,
+        },
+      });
+
+      if (!existingDebt) {
+        return res.status(404).json({
+          message: 'Dívida não encontrada.',
+        });
+      }
+
+      const parsedBody = updateDebtStatusSchema.safeParse(req.body);
+
+      if (!parsedBody.success) {
+        return res.status(400).json({
+          message: getZodErrorMessage(parsedBody.error),
+        });
+      }
+
+      const updatedDebt = await prisma.debt.update({
+        where: {
+          id: Number(id),
+        },
+        data: {
+          status: parsedBody.data.status,
+        },
+      });
+
+      return res.status(200).json(updatedDebt);
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({
+        message: 'Erro ao atualizar status da dívida.',
+      });
+    }
+  }
+
+  async delete(req: Request, res: Response) {
+    try {
+      const userId = req.userId;
+      const { id } = req.params;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: 'Usuário não autenticado.',
+        });
+      }
+
+      const existingDebt = await prisma.debt.findFirst({
+        where: {
+          id: Number(id),
+          userId,
+        },
+      });
+
+      if (!existingDebt) {
+        return res.status(404).json({
+          message: 'Dívida não encontrada.',
+        });
+      }
+
+      await prisma.debt.delete({
+        where: {
+          id: Number(id),
+        },
+      });
+
+      return res.status(200).json({
+        message: 'Dívida removida com sucesso.',
+      });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({
+        message: 'Erro ao remover dívida.',
+      });
+    }
+  }
+}
+
+export default new DebtController();

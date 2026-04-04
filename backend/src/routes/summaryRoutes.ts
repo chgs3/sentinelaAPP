@@ -7,5 +7,8 @@ const summaryRoutes = Router();
 summaryRoutes.use(authMiddleware);
 
 summaryRoutes.get('/period', summaryController.getPeriodSummary);
+summaryRoutes.get('/categories', summaryController.getCategoriesSummary);
+summaryRoutes.get('/comparison', summaryController.getMonthComparison);
+summaryRoutes.get('/daily', summaryController.getDailySummary);
 
 export default summaryRoutes;
