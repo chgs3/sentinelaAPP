@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../services/api';
 import { removeToken } from '../../services/authStorage';
 import { useAppTheme } from '../../hooks/useAppTheme';
+import { getFirstName } from '../../utils/formatters';
 import type { AuthUser } from '../../types';
 
 function getUserInitials(name?: string | null) {
@@ -61,7 +62,10 @@ function CustomDrawerContent(props: any) {
   return (
     <SafeAreaView
       edges={['top', 'bottom']}
-      style={[styles.drawerContainer, { backgroundColor: colors.drawerBackground }]}
+      style={[
+        styles.drawerContainer,
+        { backgroundColor: colors.drawerBackground },
+      ]}
     >
       <View
         style={[
@@ -157,13 +161,7 @@ function CustomDrawerContent(props: any) {
                     style={[styles.userName, { color: colors.text }]}
                     numberOfLines={1}
                   >
-                    {user?.name ?? 'Usuário'}
-                  </Text>
-                  <Text
-                    style={[styles.userEmail, { color: colors.textMuted }]}
-                    numberOfLines={1}
-                  >
-                    {user?.email ?? 'email não disponível'}
+                    {getFirstName(user?.name)}
                   </Text>
                 </View>
               </View>
@@ -279,6 +277,36 @@ export default function AppLayout() {
       />
 
       <Drawer.Screen
+        name="dashboard"
+        options={{
+          title: 'Dashboard',
+          drawerLabel: 'Dashboard',
+          drawerIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'bar-chart' : 'bar-chart-outline'}
+              size={size ?? 22}
+              color={color}
+            />
+          ),
+        }}
+      />
+
+      <Drawer.Screen
+        name="debts"
+        options={{
+          title: 'Dívidas',
+          drawerLabel: 'Dívidas',
+          drawerIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'book' : 'book-outline'}
+              size={size ?? 22}
+              color={color}
+            />
+          ),
+        }}
+      />
+
+      <Drawer.Screen
         name="profile"
         options={{
           title: 'Perfil',
@@ -328,6 +356,14 @@ export default function AppLayout() {
         name="transaction/[id]"
         options={{
           title: 'Detalhes da transação',
+          drawerItemStyle: { display: 'none' },
+        }}
+      />
+
+      <Drawer.Screen
+        name="debt-edit/[id]"
+        options={{
+          title: 'Editar dívida',
           drawerItemStyle: { display: 'none' },
         }}
       />
@@ -417,10 +453,6 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '700',
-  },
-  userEmail: {
-    fontSize: 13,
-    marginTop: 2,
   },
   logoutButton: {
     marginTop: 12,

@@ -19,7 +19,13 @@ import { useFocusEffect, router } from 'expo-router';
 
 import { api } from '../../services/api';
 import { useAppTheme } from '../../hooks/useAppTheme';
-import { formatPaymentMethod } from '../../utils/formatters';
+import {
+  formatCurrencyBRL,
+  formatDateBR,
+  formatMonthYearShort,
+  formatPaymentMethod,
+  getFirstName,
+} from '../../utils/formatters';
 import type {
   AuthUser,
   MonthlySummary,
@@ -34,11 +40,11 @@ const paymentMethodOptions: Array<{
   label: string;
   value: ParsedTransaction['paymentMethod'];
 }> = [
-    { label: 'Pix', value: 'pix' },
-    { label: 'Crédito', value: 'credit' },
-    { label: 'Débito', value: 'debit' },
-    { label: 'Dinheiro', value: 'cash' },
-  ];
+  { label: 'Pix', value: 'pix' },
+  { label: 'Crédito', value: 'credit' },
+  { label: 'Débito', value: 'debit' },
+  { label: 'Dinheiro', value: 'cash' },
+];
 
 function getMonthRange(date: Date) {
   const year = date.getFullYear();
@@ -61,10 +67,7 @@ function getMonthRange(date: Date) {
 }
 
 function formatMonthYear(date: Date) {
-  return date.toLocaleDateString('pt-BR', {
-    month: 'long',
-    year: 'numeric',
-  });
+  return formatMonthYearShort(date);
 }
 
 export default function HomeScreen() {
@@ -350,9 +353,9 @@ export default function HomeScreen() {
     setConfirmationForm((current) =>
       current
         ? {
-          ...current,
-          [field]: value,
-        }
+            ...current,
+            [field]: value,
+          }
         : current
     );
   }
@@ -388,10 +391,7 @@ export default function HomeScreen() {
   );
 
   function formatCurrency(value: number) {
-    return value.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    });
+    return formatCurrencyBRL(value);
   }
 
   const categories = useMemo(() => {
@@ -498,7 +498,7 @@ export default function HomeScreen() {
           Categoria: {item.category}
         </Text>
         <Text style={[styles.transactionMeta, { color: colors.textMuted }]}>
-          Data: {new Date(item.transactionAt).toLocaleDateString('pt-BR')}
+          Data: {formatDateBR(item.transactionAt)}
         </Text>
         <Text style={[styles.transactionMeta, { color: colors.textMuted }]}>
           Pagamento: {formatPaymentMethod(item.paymentMethod)}
@@ -567,6 +567,20 @@ export default function HomeScreen() {
           <>
             <View
               style={[
+                styles.userCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.userGreeting, { color: colors.text }]}>
+                Olá, {getFirstName(user?.name)}
+              </Text>
+            </View>
+
+            <View
+              style={[
                 styles.periodCard,
                 {
                   backgroundColor: colors.surface,
@@ -598,7 +612,7 @@ export default function HomeScreen() {
                   <Text
                     style={[styles.periodDates, { color: colors.textMuted }]}
                   >
-                    {period.startDate} até {period.endDate}
+                    {formatDateBR(period.startDate)} até {formatDateBR(period.endDate)}
                   </Text>
                 </View>
 
@@ -628,23 +642,6 @@ export default function HomeScreen() {
                   Ir para o mês atual
                 </Text>
               </TouchableOpacity>
-            </View>
-
-            <View
-              style={[
-                styles.userCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.userGreeting, { color: colors.text }]}>
-                Olá, {user?.name ?? 'usuário'}
-              </Text>
-              <Text style={[styles.userEmail, { color: colors.textMuted }]}>
-                {user?.email ?? 'email não disponível'}
-              </Text>
             </View>
 
             <View
@@ -901,9 +898,7 @@ export default function HomeScreen() {
                     onPress={() => setShowDatePicker(true)}
                   >
                     <Text style={{ color: colors.text }}>
-                      {new Date(
-                        confirmationForm.transactionAt
-                      ).toLocaleDateString('pt-BR')}
+                      {formatDateBR(confirmationForm.transactionAt)}
                     </Text>
                   </TouchableOpacity>
 
@@ -1205,10 +1200,20 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 28,
   },
-  periodCard: {
+  userCard: {
     padding: 16,
     borderRadius: 18,
     marginTop: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  userGreeting: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  periodCard: {
+    padding: 16,
+    borderRadius: 18,
     marginBottom: 16,
     borderWidth: 1,
   },
@@ -1240,7 +1245,6 @@ const styles = StyleSheet.create({
   periodLabel: {
     fontSize: 18,
     fontWeight: '700',
-    textTransform: 'capitalize',
   },
   periodDates: {
     fontSize: 12,
@@ -1254,20 +1258,6 @@ const styles = StyleSheet.create({
   },
   currentMonthButtonText: {
     fontWeight: '700',
-  },
-  userCard: {
-    padding: 16,
-    borderRadius: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-  },
-  userGreeting: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 14,
   },
   summaryCard: {
     padding: 16,
