@@ -16,6 +16,8 @@ model User {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   transactions Transaction[]
+  debts Debt[]
+  monthlyClosures MonthlyClosure[]
 }
 
 model Transaction {
@@ -31,4 +33,37 @@ model Transaction {
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model Debt {
+  id          Int      @id @default(autoincrement())
+  personName  String
+  type        String
+  amount      Float
+  description String
+  status      String
+  dueDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MonthlyClosure {
+  id                Int      @id @default(autoincrement())
+  month             Int
+  year              Int
+  startDate         DateTime
+  endDate           DateTime
+  totalIncomes      Float
+  totalExpenses     Float
+  balance           Float
+  totalTransactions Int
+  closedAt          DateTime @default(now())
+  userId            Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, month, year])
 }
