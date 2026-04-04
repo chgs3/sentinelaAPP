@@ -41,86 +41,98 @@ Mensagem:
 ${message}
 `.trim();
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseJsonSchema: {
-          type: 'object',
-          properties: {
-            type: {
-              type: 'string',
-              enum: ['expense', 'income'],
-            },
-            amount: {
-              type: 'number',
-            },
-            description: {
-              type: 'string',
-            },
-            category: {
-              type: 'string',
-            },
-            transactionAt: {
-              type: 'string',
-            },
-            rawDateExpression: {
-              anyOf: [{ type: 'string' }, { type: 'null' }],
-            },
-            paymentMethod: {
-              anyOf: [
-                {
-                  type: 'string',
-                  enum: ['credit', 'debit', 'pix', 'cash'],
-                },
-                {
-                  type: 'null',
-                },
-              ],
-            },
-            accountOrCard: {
-              anyOf: [{ type: 'string' }, { type: 'null' }],
-            },
-            confidence: {
-              type: 'number',
-            },
-            possibleTransfer: {
-              type: 'boolean',
-            },
-          },
-          required: [
-            'type',
-            'amount',
-            'description',
-            'category',
-            'transactionAt',
-            'paymentMethod',
-            'accountOrCard',
-            'possibleTransfer',
-          ],
-        },
-      },
-    });
-
-    const rawText = response.text;
-
-    if (!rawText) {
-      return null;
-    }
-
     try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseJsonSchema: {
+            type: 'object',
+            properties: {
+              type: {
+                type: 'string',
+                enum: ['expense', 'income'],
+              },
+              amount: {
+                type: 'number',
+              },
+              description: {
+                type: 'string',
+              },
+              category: {
+                type: 'string',
+              },
+              transactionAt: {
+                type: 'string',
+              },
+              rawDateExpression: {
+                anyOf: [{ type: 'string' }, { type: 'null' }],
+              },
+              paymentMethod: {
+                anyOf: [
+                  {
+                    type: 'string',
+                    enum: ['credit', 'debit', 'pix', 'cash'],
+                  },
+                  {
+                    type: 'null',
+                  },
+                ],
+              },
+              accountOrCard: {
+                anyOf: [{ type: 'string' }, { type: 'null' }],
+              },
+              confidence: {
+                type: 'number',
+              },
+              possibleTransfer: {
+                type: 'boolean',
+              },
+            },
+            required: [
+              'type',
+              'amount',
+              'description',
+              'category',
+              'transactionAt',
+              'paymentMethod',
+              'accountOrCard',
+              'possibleTransfer',
+            ],
+          },
+        },
+      });
+
+      const rawText = response.text;
+
+      if (!rawText) {
+        return null;
+      }
+
       const parsedJson = JSON.parse(rawText);
       const validated = aiTransactionSchema.safeParse(parsedJson);
 
       if (!validated.success) {
-        console.error('Gemini retornou JSON inválido:', validated.error.flatten());
+        console.error(
+          'Gemini retornou JSON inválido:',
+          validated.error.flatten()
+        );
         return null;
       }
 
       return validated.data;
-    } catch (error) {
-      console.error('Erro ao parsear resposta do Gemini:', error);
+    } catch (error: any) {
+      const status = error?.status ?? error?.response?.status;
+
+      if (status === 429) {
+        console.warn(
+          'Gemini indisponível por limite de cota. Usando fallback local.'
+        );
+        return null;
+      }
+
+      console.error('Erro ao consultar Gemini. Usando fallback local.', error);
       return null;
     }
   }

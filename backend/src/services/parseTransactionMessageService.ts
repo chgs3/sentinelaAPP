@@ -183,19 +183,19 @@ class ParseTransactionMessageService {
 
   private detectPaymentMethod(message: string): string | null {
     if (message.includes('crédito') || message.includes('credito')) {
-      return 'credit';
+      return 'Crédito';
     }
 
     if (message.includes('débito') || message.includes('debito')) {
-      return 'debit';
+      return 'Débito';
     }
 
     if (message.includes('pix')) {
-      return 'pix';
+      return 'Pix';
     }
 
     if (message.includes('dinheiro')) {
-      return 'cash';
+      return 'Dinheiro';
     }
 
     return null;
@@ -203,16 +203,16 @@ class ParseTransactionMessageService {
 
   private detectAccountOrCard(message: string): string | null {
     const institutions = [
-      'nubank',
-      'inter',
-      'picpay',
-      'caixa',
-      'itau',
-      'itaú',
-      'bradesco',
-      'santander',
-      'bb',
-      'banco do brasil',
+      'Nubank',
+      'Inter',
+      'Picpay',
+      'Caixa',
+      'Itau',
+      'Itaú',
+      'Bradesco',
+      'Santander',
+      'BB',
+      'Banco do Brasil',
     ];
 
     const foundInstitution = institutions.find((institution) =>

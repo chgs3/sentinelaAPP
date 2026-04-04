@@ -1,4 +1,8 @@
-export type ParseStatus = 'created' | 'needs_confirmation' | 'unable_to_parse';
+export type ParseStatus =
+  | 'created'
+  | 'needs_confirmation'
+  | 'unable_to_parse'
+  | 'ignored_transfer';
 
 export type ParseDecision =
   | {
@@ -13,6 +17,11 @@ export type ParseDecision =
     }
   | {
       status: 'unable_to_parse';
+      reason: string;
+      ambiguities: string[];
+    }
+  | {
+      status: 'ignored_transfer';
       reason: string;
       ambiguities: string[];
     };

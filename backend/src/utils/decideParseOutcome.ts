@@ -11,6 +11,32 @@ function isEssentiallyValid(parsed: AITransactionOutput) {
   return true;
 }
 
+function isClearlySimpleTransaction(message: string, parsed: AITransactionOutput) {
+  const normalized = message
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+  const clearIncome =
+    parsed.type === 'income' &&
+    ['recebi', 'ganhei', 'entrou', 'entrada', 'caiu'].some((word) =>
+      normalized.includes(word)
+    );
+
+  const clearExpense =
+    parsed.type === 'expense' &&
+    ['gastei', 'paguei', 'comprei', 'gasto', 'pago'].some((word) =>
+      normalized.includes(word)
+    );
+
+  const hasAmount = !!parsed.amount && parsed.amount > 0;
+  const hasKnownPaymentMethod = !!parsed.paymentMethod;
+  const notTransfer = parsed.possibleTransfer !== true;
+
+  return (clearIncome || clearExpense) && hasAmount && hasKnownPaymentMethod && notTransfer;
+}
+
 export function decideParseOutcome(
   message: string,
   parsed: AITransactionOutput
@@ -23,6 +49,24 @@ export function decideParseOutcome(
       return {
         status: 'unable_to_parse',
         reason: 'Campos essenciais insuficientes para registrar a transação.',
+        ambiguities,
+      };
+    }
+
+    if (parsed.possibleTransfer === true) {
+      return {
+        status: 'ignored_transfer',
+        reason:
+          'Isso parece uma transferência entre contas. O Sentinela não registrou como receita nem despesa.',
+        ambiguities,
+      };
+    }
+
+    // Casos simples e claros devem passar mesmo sem IA.
+    if (isClearlySimpleTransaction(message, parsed)) {
+      return {
+        status: 'created',
+        reason: 'Transação simples interpretada com segurança.',
         ambiguities,
       };
     }
@@ -48,7 +92,6 @@ export function decideParseOutcome(
     const confirmationTriggers = ambiguities.filter((item) =>
       [
         'Categoria muito genérica.',
-        'Mensagem pode representar transferência interna.',
         'Expressão temporal potencialmente ambígua.',
         'Mensagem curta demais para interpretação segura.',
         'Mensagem ambígua quanto a receita ou despesa.',

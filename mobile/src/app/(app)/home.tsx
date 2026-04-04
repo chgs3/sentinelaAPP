@@ -11,22 +11,69 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, router } from 'expo-router';
 
 import { api } from '../../services/api';
 import { useAppTheme } from '../../hooks/useAppTheme';
+import { formatPaymentMethod } from '../../utils/formatters';
 import type {
   AuthUser,
   MonthlySummary,
   ParseMessageResponse,
+  ParsedTransaction,
   Transaction,
 } from '../../types';
 
 type TransactionTypeFilter = 'all' | 'expense' | 'income';
 
+const paymentMethodOptions: Array<{
+  label: string;
+  value: ParsedTransaction['paymentMethod'];
+}> = [
+    { label: 'Pix', value: 'pix' },
+    { label: 'Crédito', value: 'credit' },
+    { label: 'Débito', value: 'debit' },
+    { label: 'Dinheiro', value: 'cash' },
+  ];
+
+function getMonthRange(date: Date) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+
+  const start = new Date(year, month, 1);
+  const end = new Date(year, month + 1, 0);
+
+  const formatDate = (value: Date) => {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  return {
+    startDate: formatDate(start),
+    endDate: formatDate(end),
+  };
+}
+
+function formatMonthYear(date: Date) {
+  return date.toLocaleDateString('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 export default function HomeScreen() {
   const { colors } = useAppTheme();
+
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
 
   const [user, setUser] = useState<AuthUser | null>(null);
   const [summary, setSummary] = useState<MonthlySummary | null>(null);
@@ -37,11 +84,18 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+
   const [pendingConfirmation, setPendingConfirmation] =
     useState<ParseMessageResponse | null>(null);
+  const [confirmationForm, setConfirmationForm] =
+    useState<ParsedTransaction | null>(null);
+  const [confirmationAmount, setConfirmationAmount] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [typeFilter, setTypeFilter] = useState<TransactionTypeFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState('Todas');
+
+  const period = useMemo(() => getMonthRange(selectedMonth), [selectedMonth]);
 
   async function loadData(showInitialLoading = false) {
     try {
@@ -52,8 +106,18 @@ export default function HomeScreen() {
       const [meResponse, summaryResponse, transactionsResponse] =
         await Promise.all([
           api.get<{ user: AuthUser }>('/auth/me'),
-          api.get<MonthlySummary>('/summary/monthly'),
-          api.get<Transaction[]>('/transactions'),
+          api.get<MonthlySummary>('/summary/period', {
+            params: {
+              startDate: period.startDate,
+              endDate: period.endDate,
+            },
+          }),
+          api.get<Transaction[]>('/transactions', {
+            params: {
+              startDate: period.startDate,
+              endDate: period.endDate,
+            },
+          }),
         ]);
 
       setUser(meResponse.data.user);
@@ -78,6 +142,34 @@ export default function HomeScreen() {
     }
   }
 
+  function goToPreviousMonth() {
+    setSelectedMonth((current) => {
+      const next = new Date(current);
+      next.setMonth(next.getMonth() - 1);
+      return new Date(next.getFullYear(), next.getMonth(), 1);
+    });
+  }
+
+  function goToNextMonth() {
+    setSelectedMonth((current) => {
+      const next = new Date(current);
+      next.setMonth(next.getMonth() + 1);
+      return new Date(next.getFullYear(), next.getMonth(), 1);
+    });
+  }
+
+  function goToCurrentMonth() {
+    const now = new Date();
+    setSelectedMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+  }
+
+  function resetConfirmationState() {
+    setPendingConfirmation(null);
+    setConfirmationForm(null);
+    setConfirmationAmount('');
+    setShowDatePicker(false);
+  }
+
   async function handleSubmitMessage() {
     if (!message.trim()) {
       Alert.alert('Atenção', 'Digite uma mensagem para registrar a transação.');
@@ -95,15 +187,28 @@ export default function HomeScreen() {
 
       if (result.status === 'created') {
         setMessage('');
-        setPendingConfirmation(null);
+        resetConfirmationState();
         await loadData(false);
 
         Alert.alert('Sucesso', 'Transação registrada com sucesso.');
         return;
       }
 
+      if (result.status === 'ignored_transfer') {
+        resetConfirmationState();
+
+        Alert.alert(
+          'Transferência detectada',
+          `${result.message}\n\nTransferências entre suas próprias contas não entram como receita nem despesa no Sentinela.`
+        );
+        return;
+      }
+
       if (result.status === 'needs_confirmation') {
         setPendingConfirmation(result);
+        setConfirmationForm(result.parsed);
+        setConfirmationAmount(String(result.parsed.amount));
+
         Alert.alert(
           'Confirmação necessária',
           'O Sentinela entendeu sua mensagem, mas quer sua confirmação antes de salvar.'
@@ -137,10 +242,28 @@ export default function HomeScreen() {
   }
 
   async function handleConfirmParsedTransaction() {
+    if (!confirmationForm) {
+      return;
+    }
+
     if (
-      !pendingConfirmation ||
-      pendingConfirmation.status !== 'needs_confirmation'
+      !confirmationForm.description.trim() ||
+      !confirmationForm.category.trim() ||
+      !confirmationAmount.trim()
     ) {
+      Alert.alert(
+        'Atenção',
+        'Preencha descrição, categoria e valor antes de confirmar.'
+      );
+      return;
+    }
+
+    const parsedAmount = Number(
+      confirmationAmount.replace(/\./g, '').replace(',', '.')
+    );
+
+    if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+      Alert.alert('Atenção', 'Informe um valor válido para confirmar.');
       return;
     }
 
@@ -148,10 +271,16 @@ export default function HomeScreen() {
       setSubmitting(true);
 
       await api.post('/messages/confirm', {
-        parsed: pendingConfirmation.parsed,
+        parsed: {
+          ...confirmationForm,
+          amount: parsedAmount,
+          description: confirmationForm.description.trim(),
+          category: confirmationForm.category.trim(),
+          accountOrCard: confirmationForm.accountOrCard?.trim() || null,
+        },
       });
 
-      setPendingConfirmation(null);
+      resetConfirmationState();
       setMessage('');
       await loadData(false);
 
@@ -214,14 +343,48 @@ export default function HomeScreen() {
     });
   }
 
+  function updateConfirmationField<K extends keyof ParsedTransaction>(
+    field: K,
+    value: ParsedTransaction[K]
+  ) {
+    setConfirmationForm((current) =>
+      current
+        ? {
+          ...current,
+          [field]: value,
+        }
+        : current
+    );
+  }
+
+  function handleConfirmationDateChange(
+    event: DateTimePickerEvent,
+    selectedDate?: Date
+  ) {
+    setShowDatePicker(false);
+
+    if (event.type !== 'set' || !selectedDate) {
+      return;
+    }
+
+    const normalizedDate = new Date(selectedDate);
+    normalizedDate.setHours(12, 0, 0, 0);
+
+    updateConfirmationField('transactionAt', normalizedDate.toISOString());
+  }
+
   useEffect(() => {
     loadData(true);
   }, []);
 
+  useEffect(() => {
+    loadData(false);
+  }, [period.startDate, period.endDate]);
+
   useFocusEffect(
     useCallback(() => {
       loadData(false);
-    }, [])
+    }, [period.startDate, period.endDate])
   );
 
   function formatCurrency(value: number) {
@@ -237,6 +400,27 @@ export default function HomeScreen() {
     ).sort();
 
     return ['Todas', ...uniqueCategories];
+  }, [transactions]);
+
+  const suggestionCategories = useMemo(() => {
+    const defaults = [
+      'Alimentação',
+      'Transporte',
+      'Moradia',
+      'Saúde',
+      'Lazer',
+      'Trabalho',
+      'Educação',
+      'Compras',
+      'Outros',
+    ];
+
+    const merged = new Set([
+      ...defaults,
+      ...transactions.map((transaction) => transaction.category),
+    ]);
+
+    return Array.from(merged);
   }, [transactions]);
 
   const filteredTransactions = useMemo(() => {
@@ -268,6 +452,18 @@ export default function HomeScreen() {
       return matchesType && matchesCategory && matchesSearch;
     });
   }, [transactions, typeFilter, categoryFilter, search]);
+
+  const hasActiveFilters = useMemo(() => {
+    return (
+      search.trim().length > 0 ||
+      typeFilter !== 'all' ||
+      categoryFilter !== 'Todas'
+    );
+  }, [search, typeFilter, categoryFilter]);
+
+  const transactionsSectionTitle = hasActiveFilters
+    ? 'Transações filtradas'
+    : 'Transações';
 
   function renderTransaction({ item }: { item: Transaction }) {
     return (
@@ -305,7 +501,7 @@ export default function HomeScreen() {
           Data: {new Date(item.transactionAt).toLocaleDateString('pt-BR')}
         </Text>
         <Text style={[styles.transactionMeta, { color: colors.textMuted }]}>
-          Pagamento: {item.paymentMethod ?? 'Não informado'}
+          Pagamento: {formatPaymentMethod(item.paymentMethod)}
         </Text>
         <Text style={[styles.transactionMeta, { color: colors.textMuted }]}>
           Conta/Cartão: {item.accountOrCard ?? 'Não informado'}
@@ -371,6 +567,71 @@ export default function HomeScreen() {
           <>
             <View
               style={[
+                styles.periodCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.periodTitle, { color: colors.text }]}>
+                Período selecionado
+              </Text>
+
+              <View style={styles.periodControls}>
+                <TouchableOpacity
+                  style={[
+                    styles.periodButton,
+                    { backgroundColor: colors.surfaceSecondary },
+                  ]}
+                  onPress={goToPreviousMonth}
+                >
+                  <Text style={[styles.periodButtonText, { color: colors.text }]}>
+                    {'<'}
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.periodLabelContainer}>
+                  <Text style={[styles.periodLabel, { color: colors.text }]}>
+                    {formatMonthYear(selectedMonth)}
+                  </Text>
+                  <Text
+                    style={[styles.periodDates, { color: colors.textMuted }]}
+                  >
+                    {period.startDate} até {period.endDate}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.periodButton,
+                    { backgroundColor: colors.surfaceSecondary },
+                  ]}
+                  onPress={goToNextMonth}
+                >
+                  <Text style={[styles.periodButtonText, { color: colors.text }]}>
+                    {'>'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.currentMonthButton,
+                  { backgroundColor: colors.surfaceSecondary },
+                ]}
+                onPress={goToCurrentMonth}
+              >
+                <Text
+                  style={[styles.currentMonthButtonText, { color: colors.text }]}
+                >
+                  Ir para o mês atual
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View
+              style={[
                 styles.userCard,
                 {
                   backgroundColor: colors.surface,
@@ -396,7 +657,7 @@ export default function HomeScreen() {
               ]}
             >
               <Text style={[styles.summaryTitle, { color: colors.text }]}>
-                Resumo do mês
+                Resumo do período
               </Text>
               <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
                 Receitas: {formatCurrency(summary?.totalIncomes ?? 0)}
@@ -453,76 +714,352 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            {pendingConfirmation?.status === 'needs_confirmation' && (
-              <View
-                style={[
-                  styles.formCard,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.formTitle, { color: colors.text }]}>
-                  Confirmar interpretação
-                </Text>
+            {pendingConfirmation?.status === 'needs_confirmation' &&
+              confirmationForm && (
+                <View
+                  style={[
+                    styles.formCard,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.formTitle, { color: colors.text }]}>
+                    Revisar antes de salvar
+                  </Text>
 
-                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
-                  Tipo:{' '}
-                  {pendingConfirmation.parsed.type === 'expense'
-                    ? 'Despesa'
-                    : 'Receita'}
-                </Text>
-                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
-                  Valor: {formatCurrency(pendingConfirmation.parsed.amount)}
-                </Text>
-                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
-                  Descrição: {pendingConfirmation.parsed.description}
-                </Text>
-                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
-                  Categoria: {pendingConfirmation.parsed.category}
-                </Text>
-                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
-                  Data:{' '}
-                  {new Date(
-                    pendingConfirmation.parsed.transactionAt
-                  ).toLocaleDateString('pt-BR')}
-                </Text>
-
-                {pendingConfirmation.ambiguities.length > 0 && (
-                  <View style={styles.attentionBox}>
-                    <Text style={[styles.filterLabel, { color: colors.text }]}>
-                      Pontos de atenção
-                    </Text>
-                    {pendingConfirmation.ambiguities.map((item, index) => (
+                  <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                    Tipo
+                  </Text>
+                  <View style={styles.segmentRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.segmentButton,
+                        {
+                          backgroundColor:
+                            confirmationForm.type === 'expense'
+                              ? colors.primary
+                              : colors.surfaceSecondary,
+                        },
+                      ]}
+                      onPress={() => updateConfirmationField('type', 'expense')}
+                    >
                       <Text
-                        key={`${item}-${index}`}
                         style={[
-                          styles.transactionMeta,
-                          { color: colors.textMuted },
+                          styles.segmentButtonText,
+                          {
+                            color:
+                              confirmationForm.type === 'expense'
+                                ? '#FFFFFF'
+                                : colors.text,
+                          },
                         ]}
                       >
-                        • {item}
+                        Despesa
                       </Text>
-                    ))}
-                  </View>
-                )}
+                    </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[
-                    styles.button,
-                    { backgroundColor: colors.primary },
-                    submitting && styles.buttonDisabled,
-                  ]}
-                  onPress={handleConfirmParsedTransaction}
-                  disabled={submitting}
-                >
-                  <Text style={styles.buttonText}>
-                    {submitting ? 'Confirmando...' : 'Confirmar e salvar'}
+                    <TouchableOpacity
+                      style={[
+                        styles.segmentButton,
+                        {
+                          backgroundColor:
+                            confirmationForm.type === 'income'
+                              ? colors.primary
+                              : colors.surfaceSecondary,
+                        },
+                      ]}
+                      onPress={() => updateConfirmationField('type', 'income')}
+                    >
+                      <Text
+                        style={[
+                          styles.segmentButtonText,
+                          {
+                            color:
+                              confirmationForm.type === 'income'
+                                ? '#FFFFFF'
+                                : colors.text,
+                          },
+                        ]}
+                      >
+                        Receita
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                    Valor
                   </Text>
-                </TouchableOpacity>
-              </View>
-            )}
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: colors.inputBackground,
+                        borderColor: colors.border,
+                        color: colors.text,
+                      },
+                    ]}
+                    placeholder="Valor"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="numeric"
+                    value={confirmationAmount}
+                    onChangeText={setConfirmationAmount}
+                  />
+
+                  <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                    Descrição
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: colors.inputBackground,
+                        borderColor: colors.border,
+                        color: colors.text,
+                      },
+                    ]}
+                    placeholder="Descrição"
+                    placeholderTextColor={colors.textMuted}
+                    value={confirmationForm.description}
+                    onChangeText={(value) =>
+                      updateConfirmationField('description', value)
+                    }
+                  />
+
+                  <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                    Categoria
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: colors.inputBackground,
+                        borderColor: colors.border,
+                        color: colors.text,
+                      },
+                    ]}
+                    placeholder="Categoria"
+                    placeholderTextColor={colors.textMuted}
+                    value={confirmationForm.category}
+                    onChangeText={(value) =>
+                      updateConfirmationField('category', value)
+                    }
+                  />
+
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.categoriesRow}
+                  >
+                    {suggestionCategories.map((category) => {
+                      const active = confirmationForm.category === category;
+
+                      return (
+                        <TouchableOpacity
+                          key={category}
+                          style={[
+                            styles.categoryChip,
+                            {
+                              backgroundColor: active
+                                ? colors.drawerActiveBg
+                                : colors.surfaceSecondary,
+                            },
+                          ]}
+                          onPress={() =>
+                            updateConfirmationField('category', category)
+                          }
+                        >
+                          <Text
+                            style={[
+                              styles.categoryChipText,
+                              {
+                                color: active
+                                  ? colors.drawerActiveText
+                                  : colors.text,
+                              },
+                            ]}
+                          >
+                            {category}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+
+                  <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                    Data
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.inputButton,
+                      {
+                        backgroundColor: colors.inputBackground,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                    onPress={() => setShowDatePicker(true)}
+                  >
+                    <Text style={{ color: colors.text }}>
+                      {new Date(
+                        confirmationForm.transactionAt
+                      ).toLocaleDateString('pt-BR')}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {showDatePicker && (
+                    <DateTimePicker
+                      value={new Date(confirmationForm.transactionAt)}
+                      mode="date"
+                      display="default"
+                      onChange={handleConfirmationDateChange}
+                    />
+                  )}
+
+                  <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                    Forma de pagamento
+                  </Text>
+                  <View style={styles.segmentRowWrap}>
+                    {paymentMethodOptions.map((option) => {
+                      const active =
+                        confirmationForm.paymentMethod === option.value;
+
+                      return (
+                        <TouchableOpacity
+                          key={option.label}
+                          style={[
+                            styles.pillButton,
+                            {
+                              backgroundColor: active
+                                ? colors.primary
+                                : colors.surfaceSecondary,
+                            },
+                          ]}
+                          onPress={() =>
+                            updateConfirmationField('paymentMethod', option.value)
+                          }
+                        >
+                          <Text
+                            style={[
+                              styles.pillButtonText,
+                              {
+                                color: active ? '#FFFFFF' : colors.text,
+                              },
+                            ]}
+                          >
+                            {option.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+
+                    <TouchableOpacity
+                      style={[
+                        styles.pillButton,
+                        {
+                          backgroundColor:
+                            confirmationForm.paymentMethod === null
+                              ? colors.primary
+                              : colors.surfaceSecondary,
+                        },
+                      ]}
+                      onPress={() =>
+                        updateConfirmationField('paymentMethod', null)
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.pillButtonText,
+                          {
+                            color:
+                              confirmationForm.paymentMethod === null
+                                ? '#FFFFFF'
+                                : colors.text,
+                          },
+                        ]}
+                      >
+                        Não informado
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                    Conta/Cartão
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: colors.inputBackground,
+                        borderColor: colors.border,
+                        color: colors.text,
+                      },
+                    ]}
+                    placeholder="Conta ou cartão"
+                    placeholderTextColor={colors.textMuted}
+                    value={confirmationForm.accountOrCard ?? ''}
+                    onChangeText={(value) =>
+                      updateConfirmationField('accountOrCard', value)
+                    }
+                  />
+
+                  {pendingConfirmation.ambiguities.length > 0 && (
+                    <View style={styles.attentionBox}>
+                      <Text style={[styles.filterLabel, { color: colors.text }]}>
+                        Pontos de atenção
+                      </Text>
+                      {pendingConfirmation.ambiguities.map((item, index) => (
+                        <Text
+                          key={`${item}-${index}`}
+                          style={[
+                            styles.transactionMeta,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          • {item}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+
+                  <View style={styles.confirmationActions}>
+                    <TouchableOpacity
+                      style={[
+                        styles.secondaryButton,
+                        {
+                          backgroundColor: colors.surfaceSecondary,
+                        },
+                      ]}
+                      onPress={resetConfirmationState}
+                      disabled={submitting}
+                    >
+                      <Text
+                        style={[
+                          styles.secondaryButtonText,
+                          { color: colors.text },
+                        ]}
+                      >
+                        Cancelar
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.button,
+                        styles.confirmPrimaryButton,
+                        { backgroundColor: colors.primary },
+                        submitting && styles.buttonDisabled,
+                      ]}
+                      onPress={handleConfirmParsedTransaction}
+                      disabled={submitting}
+                    >
+                      <Text style={styles.buttonText}>
+                        {submitting ? 'Confirmando...' : 'Salvar ajustado'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
 
             <View
               style={[
@@ -637,13 +1174,13 @@ export default function HomeScreen() {
             </View>
 
             <Text style={[styles.listTitle, { color: colors.text }]}>
-              Transações filtradas
+              {transactionsSectionTitle}
             </Text>
           </>
         }
         ListEmptyComponent={
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-            Nenhuma transação encontrada para os filtros selecionados.
+            Nenhuma transação encontrada para o período e filtros selecionados.
           </Text>
         }
       />
@@ -668,10 +1205,59 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 28,
   },
-  userCard: {
+  periodCard: {
     padding: 16,
     borderRadius: 18,
     marginTop: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  periodTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  periodControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  periodButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  periodButtonText: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  periodLabelContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  periodLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  periodDates: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  currentMonthButton: {
+    marginTop: 12,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  currentMonthButtonText: {
+    fontWeight: '700',
+  },
+  userCard: {
+    padding: 16,
+    borderRadius: 18,
     marginBottom: 16,
     borderWidth: 1,
   },
@@ -709,6 +1295,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 12,
   },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 8,
+    marginTop: 4,
+  },
   input: {
     borderWidth: 1,
     borderRadius: 14,
@@ -717,10 +1309,30 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontSize: 15,
   },
+  inputButton: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    marginBottom: 12,
+  },
   button: {
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
+  },
+  confirmPrimaryButton: {
+    flex: 1,
+  },
+  secondaryButton: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    fontWeight: '700',
+    fontSize: 16,
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -733,6 +1345,39 @@ const styles = StyleSheet.create({
   attentionBox: {
     marginTop: 10,
     marginBottom: 12,
+  },
+  confirmationActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  segmentRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  segmentRowWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  segmentButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  segmentButtonText: {
+    fontWeight: '700',
+  },
+  pillButton: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  pillButtonText: {
+    fontWeight: '600',
   },
   filtersCard: {
     padding: 16,
