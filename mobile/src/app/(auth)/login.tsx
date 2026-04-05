@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -56,73 +59,84 @@ export default function LoginScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={['top', 'bottom']}
     >
-      <View
-        style={[
-          styles.card,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-          },
-        ]}
+      <KeyboardAvoidingView
+        style={styles.keyboardContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Text style={[styles.title, { color: colors.text }]}>Entrar</Text>
-        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-          Acesse o Sentinela com sua conta.
-        </Text>
-
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.inputBackground,
-              borderColor: colors.border,
-              color: colors.text,
-            },
-          ]}
-          placeholder="Email"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.inputBackground,
-              borderColor: colors.border,
-              color: colors.text,
-            },
-          ]}
-          placeholder="Senha"
-          placeholderTextColor={colors.textMuted}
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-
-        <TouchableOpacity
-          style={[
-            styles.button,
-            { backgroundColor: colors.primary },
-            submitting && styles.buttonDisabled,
-          ]}
-          onPress={handleLogin}
-          disabled={submitting}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.buttonText}>
-            {submitting ? 'Entrando...' : 'Entrar'}
-          </Text>
-        </TouchableOpacity>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.title, { color: colors.text }]}>Entrar</Text>
+            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+              Acesse o Sentinela com sua conta.
+            </Text>
 
-        <TouchableOpacity onPress={() => router.push('/register')}>
-          <Text style={[styles.link, { color: colors.primary }]}>
-            Criar conta
-          </Text>
-        </TouchableOpacity>
-      </View>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="Email"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+            />
+
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="Senha"
+              placeholderTextColor={colors.textMuted}
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+            />
+
+            <TouchableOpacity
+              style={[
+                styles.button,
+                { backgroundColor: colors.primary },
+                submitting && styles.buttonDisabled,
+              ]}
+              onPress={handleLogin}
+              disabled={submitting}
+            >
+              <Text style={styles.buttonText}>
+                {submitting ? 'Entrando...' : 'Entrar'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => router.push('/register')}>
+              <Text style={[styles.link, { color: colors.primary }]}>
+                Criar conta
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -130,6 +144,12 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  keyboardContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 16,
   },

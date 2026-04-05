@@ -3,6 +3,10 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -94,6 +98,7 @@ export default function HomeScreen() {
     useState<ParsedTransaction | null>(null);
   const [confirmationAmount, setConfirmationAmount] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showFiltersModal, setShowFiltersModal] = useState(false);
 
   const [typeFilter, setTypeFilter] = useState<TransactionTypeFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState('Todas');
@@ -182,14 +187,18 @@ export default function HomeScreen() {
     try {
       setSubmitting(true);
 
+      const trimmedMessage = message.trim();
+
       const response = await api.post<ParseMessageResponse>('/messages/parse', {
-        message,
+        message: trimmedMessage,
       });
+
+      setMessage('');
+      Keyboard.dismiss();
 
       const result = response.data;
 
       if (result.status === 'created') {
-        setMessage('');
         resetConfirmationState();
         await loadData(false);
 
@@ -232,10 +241,17 @@ export default function HomeScreen() {
         return;
       }
     } catch (error: any) {
-      console.error(error);
+      console.error('Erro em handleSubmitMessage:', {
+        message: error?.message,
+        code: error?.code,
+        status: error?.response?.status,
+        data: error?.response?.data,
+        request: error?.request,
+      });
 
       const apiMessage =
         error?.response?.data?.message ??
+        error?.message ??
         'Não foi possível registrar a transação.';
 
       Alert.alert('Erro', apiMessage);
@@ -285,6 +301,7 @@ export default function HomeScreen() {
 
       resetConfirmationState();
       setMessage('');
+      Keyboard.dismiss();
       await loadData(false);
 
       Alert.alert('Sucesso', 'Transação confirmada e registrada com sucesso.');
@@ -555,521 +572,611 @@ export default function HomeScreen() {
       edges={['bottom']}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <FlatList
-        data={filteredTransactions}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={renderTransaction}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={
-          <>
-            <View
-              style={[
-                styles.userCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.userGreeting, { color: colors.text }]}>
-                Olá, {getFirstName(user?.name)}
-              </Text>
-            </View>
+      <KeyboardAvoidingView
+        style={styles.keyboardContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <FlatList
+          data={filteredTransactions}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={renderTransaction}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+          contentContainerStyle={styles.listContent}
+          ListHeaderComponent={
+            <>
+              <View
+                style={[
+                  styles.userCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.userGreeting, { color: colors.text }]}>
+                  Olá, {getFirstName(user?.name)}
+                </Text>
+              </View>
 
-            <View
-              style={[
-                styles.periodCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.periodTitle, { color: colors.text }]}>
-                Período selecionado
-              </Text>
+              <View
+                style={[
+                  styles.periodCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.periodTitle, { color: colors.text }]}>
+                  Período selecionado
+                </Text>
 
-              <View style={styles.periodControls}>
-                <TouchableOpacity
-                  style={[
-                    styles.periodButton,
-                    { backgroundColor: colors.surfaceSecondary },
-                  ]}
-                  onPress={goToPreviousMonth}
-                >
-                  <Text style={[styles.periodButtonText, { color: colors.text }]}>
-                    {'<'}
-                  </Text>
-                </TouchableOpacity>
-
-                <View style={styles.periodLabelContainer}>
-                  <Text style={[styles.periodLabel, { color: colors.text }]}>
-                    {formatMonthYear(selectedMonth)}
-                  </Text>
-                  <Text
-                    style={[styles.periodDates, { color: colors.textMuted }]}
+                <View style={styles.periodControls}>
+                  <TouchableOpacity
+                    style={[
+                      styles.periodButton,
+                      { backgroundColor: colors.surfaceSecondary },
+                    ]}
+                    onPress={goToPreviousMonth}
                   >
-                    {formatDateBR(period.startDate)} até {formatDateBR(period.endDate)}
-                  </Text>
+                    <Text
+                      style={[styles.periodButtonText, { color: colors.text }]}
+                    >
+                      {'<'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.periodLabelContainer}>
+                    <Text style={[styles.periodLabel, { color: colors.text }]}>
+                      {formatMonthYear(selectedMonth)}
+                    </Text>
+                    <Text
+                      style={[styles.periodDates, { color: colors.textMuted }]}
+                    >
+                      {formatDateBR(period.startDate)} até{' '}
+                      {formatDateBR(period.endDate)}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.periodButton,
+                      { backgroundColor: colors.surfaceSecondary },
+                    ]}
+                    onPress={goToNextMonth}
+                  >
+                    <Text
+                      style={[styles.periodButtonText, { color: colors.text }]}
+                    >
+                      {'>'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
                 <TouchableOpacity
                   style={[
-                    styles.periodButton,
+                    styles.currentMonthButton,
                     { backgroundColor: colors.surfaceSecondary },
                   ]}
-                  onPress={goToNextMonth}
+                  onPress={goToCurrentMonth}
                 >
-                  <Text style={[styles.periodButtonText, { color: colors.text }]}>
-                    {'>'}
+                  <Text
+                    style={[
+                      styles.currentMonthButtonText,
+                      { color: colors.text },
+                    ]}
+                  >
+                    Ir para o mês atual
                   </Text>
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
+              <View
                 style={[
-                  styles.currentMonthButton,
-                  { backgroundColor: colors.surfaceSecondary },
-                ]}
-                onPress={goToCurrentMonth}
-              >
-                <Text
-                  style={[styles.currentMonthButtonText, { color: colors.text }]}
-                >
-                  Ir para o mês atual
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View
-              style={[
-                styles.summaryCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.summaryTitle, { color: colors.text }]}>
-                Resumo do período
-              </Text>
-              <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
-                Receitas: {formatCurrency(summary?.totalIncomes ?? 0)}
-              </Text>
-              <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
-                Despesas: {formatCurrency(summary?.totalExpenses ?? 0)}
-              </Text>
-              <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
-                Saldo: {formatCurrency(summary?.balance ?? 0)}
-              </Text>
-              <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
-                Transações: {summary?.totalTransactions ?? 0}
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.formCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.formTitle, { color: colors.text }]}>
-                Registrar por mensagem
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
+                  styles.summaryCard,
                   {
-                    backgroundColor: colors.inputBackground,
+                    backgroundColor: colors.surface,
                     borderColor: colors.border,
-                    color: colors.text,
                   },
                 ]}
-                placeholder="Ex.: Gastei 32,50 com uber"
-                placeholderTextColor={colors.textMuted}
-                value={message}
-                onChangeText={setMessage}
-              />
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  { backgroundColor: colors.primary },
-                  submitting && styles.buttonDisabled,
-                ]}
-                onPress={handleSubmitMessage}
-                disabled={submitting}
               >
-                <Text style={styles.buttonText}>
-                  {submitting ? 'Enviando...' : 'Registrar'}
+                <Text style={[styles.summaryTitle, { color: colors.text }]}>
+                  Resumo do período
                 </Text>
-              </TouchableOpacity>
-            </View>
+                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
+                  Receitas: {formatCurrency(summary?.totalIncomes ?? 0)}
+                </Text>
+                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
+                  Despesas: {formatCurrency(summary?.totalExpenses ?? 0)}
+                </Text>
+                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
+                  Saldo: {formatCurrency(summary?.balance ?? 0)}
+                </Text>
+                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
+                  Transações: {summary?.totalTransactions ?? 0}
+                </Text>
+              </View>
 
-            {pendingConfirmation?.status === 'needs_confirmation' &&
-              confirmationForm && (
-                <View
+              <View
+                style={[
+                  styles.formCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.formTitle, { color: colors.text }]}>
+                  Registrar por mensagem
+                </Text>
+                <TextInput
                   style={[
-                    styles.formCard,
+                    styles.input,
                     {
-                      backgroundColor: colors.surface,
+                      backgroundColor: colors.inputBackground,
                       borderColor: colors.border,
+                      color: colors.text,
                     },
                   ]}
+                  placeholder="Ex.: Gastei 32,50 com uber"
+                  placeholderTextColor={colors.textMuted}
+                  value={message}
+                  onChangeText={setMessage}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    { backgroundColor: colors.primary },
+                    submitting && styles.buttonDisabled,
+                  ]}
+                  onPress={handleSubmitMessage}
+                  disabled={submitting}
                 >
-                  <Text style={[styles.formTitle, { color: colors.text }]}>
-                    Revisar antes de salvar
+                  <Text style={styles.buttonText}>
+                    {submitting ? 'Enviando...' : 'Registrar'}
                   </Text>
+                </TouchableOpacity>
+              </View>
 
-                  <Text style={[styles.fieldLabel, { color: colors.text }]}>
-                    Tipo
-                  </Text>
-                  <View style={styles.segmentRow}>
-                    <TouchableOpacity
-                      style={[
-                        styles.segmentButton,
-                        {
-                          backgroundColor:
-                            confirmationForm.type === 'expense'
-                              ? colors.primary
-                              : colors.surfaceSecondary,
-                        },
-                      ]}
-                      onPress={() => updateConfirmationField('type', 'expense')}
-                    >
-                      <Text
-                        style={[
-                          styles.segmentButtonText,
-                          {
-                            color:
-                              confirmationForm.type === 'expense'
-                                ? '#FFFFFF'
-                                : colors.text,
-                          },
-                        ]}
-                      >
-                        Despesa
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.segmentButton,
-                        {
-                          backgroundColor:
-                            confirmationForm.type === 'income'
-                              ? colors.primary
-                              : colors.surfaceSecondary,
-                        },
-                      ]}
-                      onPress={() => updateConfirmationField('type', 'income')}
-                    >
-                      <Text
-                        style={[
-                          styles.segmentButtonText,
-                          {
-                            color:
-                              confirmationForm.type === 'income'
-                                ? '#FFFFFF'
-                                : colors.text,
-                          },
-                        ]}
-                      >
-                        Receita
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <Text style={[styles.fieldLabel, { color: colors.text }]}>
-                    Valor
-                  </Text>
-                  <TextInput
+              {pendingConfirmation?.status === 'needs_confirmation' &&
+                confirmationForm && (
+                  <View
                     style={[
-                      styles.input,
+                      styles.formCard,
                       {
-                        backgroundColor: colors.inputBackground,
+                        backgroundColor: colors.surface,
                         borderColor: colors.border,
-                        color: colors.text,
                       },
                     ]}
-                    placeholder="Valor"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="numeric"
-                    value={confirmationAmount}
-                    onChangeText={setConfirmationAmount}
-                  />
-
-                  <Text style={[styles.fieldLabel, { color: colors.text }]}>
-                    Descrição
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: colors.inputBackground,
-                        borderColor: colors.border,
-                        color: colors.text,
-                      },
-                    ]}
-                    placeholder="Descrição"
-                    placeholderTextColor={colors.textMuted}
-                    value={confirmationForm.description}
-                    onChangeText={(value) =>
-                      updateConfirmationField('description', value)
-                    }
-                  />
-
-                  <Text style={[styles.fieldLabel, { color: colors.text }]}>
-                    Categoria
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: colors.inputBackground,
-                        borderColor: colors.border,
-                        color: colors.text,
-                      },
-                    ]}
-                    placeholder="Categoria"
-                    placeholderTextColor={colors.textMuted}
-                    value={confirmationForm.category}
-                    onChangeText={(value) =>
-                      updateConfirmationField('category', value)
-                    }
-                  />
-
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.categoriesRow}
                   >
-                    {suggestionCategories.map((category) => {
-                      const active = confirmationForm.category === category;
-
-                      return (
-                        <TouchableOpacity
-                          key={category}
-                          style={[
-                            styles.categoryChip,
-                            {
-                              backgroundColor: active
-                                ? colors.drawerActiveBg
-                                : colors.surfaceSecondary,
-                            },
-                          ]}
-                          onPress={() =>
-                            updateConfirmationField('category', category)
-                          }
-                        >
-                          <Text
-                            style={[
-                              styles.categoryChipText,
-                              {
-                                color: active
-                                  ? colors.drawerActiveText
-                                  : colors.text,
-                              },
-                            ]}
-                          >
-                            {category}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-
-                  <Text style={[styles.fieldLabel, { color: colors.text }]}>
-                    Data
-                  </Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.inputButton,
-                      {
-                        backgroundColor: colors.inputBackground,
-                        borderColor: colors.border,
-                      },
-                    ]}
-                    onPress={() => setShowDatePicker(true)}
-                  >
-                    <Text style={{ color: colors.text }}>
-                      {formatDateBR(confirmationForm.transactionAt)}
+                    <Text style={[styles.formTitle, { color: colors.text }]}>
+                      Revisar antes de salvar
                     </Text>
-                  </TouchableOpacity>
 
-                  {showDatePicker && (
-                    <DateTimePicker
-                      value={new Date(confirmationForm.transactionAt)}
-                      mode="date"
-                      display="default"
-                      onChange={handleConfirmationDateChange}
-                    />
-                  )}
-
-                  <Text style={[styles.fieldLabel, { color: colors.text }]}>
-                    Forma de pagamento
-                  </Text>
-                  <View style={styles.segmentRowWrap}>
-                    {paymentMethodOptions.map((option) => {
-                      const active =
-                        confirmationForm.paymentMethod === option.value;
-
-                      return (
-                        <TouchableOpacity
-                          key={option.label}
-                          style={[
-                            styles.pillButton,
-                            {
-                              backgroundColor: active
+                    <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                      Tipo
+                    </Text>
+                    <View style={styles.segmentRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.segmentButton,
+                          {
+                            backgroundColor:
+                              confirmationForm.type === 'expense'
                                 ? colors.primary
                                 : colors.surfaceSecondary,
-                            },
-                          ]}
-                          onPress={() =>
-                            updateConfirmationField('paymentMethod', option.value)
-                          }
-                        >
-                          <Text
-                            style={[
-                              styles.pillButtonText,
-                              {
-                                color: active ? '#FFFFFF' : colors.text,
-                              },
-                            ]}
-                          >
-                            {option.label}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-
-                    <TouchableOpacity
-                      style={[
-                        styles.pillButton,
-                        {
-                          backgroundColor:
-                            confirmationForm.paymentMethod === null
-                              ? colors.primary
-                              : colors.surfaceSecondary,
-                        },
-                      ]}
-                      onPress={() =>
-                        updateConfirmationField('paymentMethod', null)
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.pillButtonText,
-                          {
-                            color:
-                              confirmationForm.paymentMethod === null
-                                ? '#FFFFFF'
-                                : colors.text,
                           },
                         ]}
+                        onPress={() =>
+                          updateConfirmationField('type', 'expense')
+                        }
                       >
-                        Não informado
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <Text style={[styles.fieldLabel, { color: colors.text }]}>
-                    Conta/Cartão
-                  </Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: colors.inputBackground,
-                        borderColor: colors.border,
-                        color: colors.text,
-                      },
-                    ]}
-                    placeholder="Conta ou cartão"
-                    placeholderTextColor={colors.textMuted}
-                    value={confirmationForm.accountOrCard ?? ''}
-                    onChangeText={(value) =>
-                      updateConfirmationField('accountOrCard', value)
-                    }
-                  />
-
-                  {pendingConfirmation.ambiguities.length > 0 && (
-                    <View style={styles.attentionBox}>
-                      <Text style={[styles.filterLabel, { color: colors.text }]}>
-                        Pontos de atenção
-                      </Text>
-                      {pendingConfirmation.ambiguities.map((item, index) => (
                         <Text
-                          key={`${item}-${index}`}
                           style={[
-                            styles.transactionMeta,
-                            { color: colors.textMuted },
+                            styles.segmentButtonText,
+                            {
+                              color:
+                                confirmationForm.type === 'expense'
+                                  ? '#FFFFFF'
+                                  : colors.text,
+                            },
                           ]}
                         >
-                          • {item}
+                          Despesa
                         </Text>
-                      ))}
-                    </View>
-                  )}
+                      </TouchableOpacity>
 
-                  <View style={styles.confirmationActions}>
-                    <TouchableOpacity
+                      <TouchableOpacity
+                        style={[
+                          styles.segmentButton,
+                          {
+                            backgroundColor:
+                              confirmationForm.type === 'income'
+                                ? colors.primary
+                                : colors.surfaceSecondary,
+                          },
+                        ]}
+                        onPress={() =>
+                          updateConfirmationField('type', 'income')
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.segmentButtonText,
+                            {
+                              color:
+                                confirmationForm.type === 'income'
+                                  ? '#FFFFFF'
+                                  : colors.text,
+                            },
+                          ]}
+                        >
+                          Receita
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                      Valor
+                    </Text>
+                    <TextInput
                       style={[
-                        styles.secondaryButton,
+                        styles.input,
                         {
-                          backgroundColor: colors.surfaceSecondary,
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.border,
+                          color: colors.text,
                         },
                       ]}
-                      onPress={resetConfirmationState}
-                      disabled={submitting}
-                    >
-                      <Text
-                        style={[
-                          styles.secondaryButtonText,
-                          { color: colors.text },
-                        ]}
-                      >
-                        Cancelar
-                      </Text>
-                    </TouchableOpacity>
+                      placeholder="Valor"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="numeric"
+                      value={confirmationAmount}
+                      onChangeText={setConfirmationAmount}
+                    />
 
+                    <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                      Descrição
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.border,
+                          color: colors.text,
+                        },
+                      ]}
+                      placeholder="Descrição"
+                      placeholderTextColor={colors.textMuted}
+                      value={confirmationForm.description}
+                      onChangeText={(value) =>
+                        updateConfirmationField('description', value)
+                      }
+                    />
+
+                    <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                      Categoria
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.border,
+                          color: colors.text,
+                        },
+                      ]}
+                      placeholder="Categoria"
+                      placeholderTextColor={colors.textMuted}
+                      value={confirmationForm.category}
+                      onChangeText={(value) =>
+                        updateConfirmationField('category', value)
+                      }
+                    />
+
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.categoriesRow}
+                    >
+                      {suggestionCategories.map((category) => {
+                        const active = confirmationForm.category === category;
+
+                        return (
+                          <TouchableOpacity
+                            key={category}
+                            style={[
+                              styles.categoryChip,
+                              {
+                                backgroundColor: active
+                                  ? colors.drawerActiveBg
+                                  : colors.surfaceSecondary,
+                              },
+                            ]}
+                            onPress={() =>
+                              updateConfirmationField('category', category)
+                            }
+                          >
+                            <Text
+                              style={[
+                                styles.categoryChipText,
+                                {
+                                  color: active
+                                    ? colors.drawerActiveText
+                                    : colors.text,
+                                },
+                              ]}
+                            >
+                              {category}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+
+                    <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                      Data
+                    </Text>
                     <TouchableOpacity
                       style={[
-                        styles.button,
-                        styles.confirmPrimaryButton,
-                        { backgroundColor: colors.primary },
-                        submitting && styles.buttonDisabled,
+                        styles.inputButton,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.border,
+                        },
                       ]}
-                      onPress={handleConfirmParsedTransaction}
-                      disabled={submitting}
+                      onPress={() => setShowDatePicker(true)}
                     >
-                      <Text style={styles.buttonText}>
-                        {submitting ? 'Confirmando...' : 'Salvar ajustado'}
+                      <Text style={{ color: colors.text }}>
+                        {formatDateBR(confirmationForm.transactionAt)}
                       </Text>
                     </TouchableOpacity>
-                  </View>
-                </View>
-              )}
 
-            <View
-              style={[
-                styles.filtersCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.filtersTitle, { color: colors.text }]}>
+                    {showDatePicker && (
+                      <DateTimePicker
+                        value={new Date(confirmationForm.transactionAt)}
+                        mode="date"
+                        display="default"
+                        onChange={handleConfirmationDateChange}
+                      />
+                    )}
+
+                    <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                      Forma de pagamento
+                    </Text>
+                    <View style={styles.segmentRowWrap}>
+                      {paymentMethodOptions.map((option) => {
+                        const active =
+                          confirmationForm.paymentMethod === option.value;
+
+                        return (
+                          <TouchableOpacity
+                            key={option.label}
+                            style={[
+                              styles.pillButton,
+                              {
+                                backgroundColor: active
+                                  ? colors.primary
+                                  : colors.surfaceSecondary,
+                              },
+                            ]}
+                            onPress={() =>
+                              updateConfirmationField(
+                                'paymentMethod',
+                                option.value
+                              )
+                            }
+                          >
+                            <Text
+                              style={[
+                                styles.pillButtonText,
+                                {
+                                  color: active ? '#FFFFFF' : colors.text,
+                                },
+                              ]}
+                            >
+                              {option.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+
+                      <TouchableOpacity
+                        style={[
+                          styles.pillButton,
+                          {
+                            backgroundColor:
+                              confirmationForm.paymentMethod === null
+                                ? colors.primary
+                                : colors.surfaceSecondary,
+                          },
+                        ]}
+                        onPress={() =>
+                          updateConfirmationField('paymentMethod', null)
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.pillButtonText,
+                            {
+                              color:
+                                confirmationForm.paymentMethod === null
+                                  ? '#FFFFFF'
+                                  : colors.text,
+                            },
+                          ]}
+                        >
+                          Não informado
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                      Conta/Cartão
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.border,
+                          color: colors.text,
+                        },
+                      ]}
+                      placeholder="Conta ou cartão"
+                      placeholderTextColor={colors.textMuted}
+                      value={confirmationForm.accountOrCard ?? ''}
+                      onChangeText={(value) =>
+                        updateConfirmationField('accountOrCard', value)
+                      }
+                    />
+
+                    {pendingConfirmation.ambiguities.length > 0 && (
+                      <View style={styles.attentionBox}>
+                        <Text
+                          style={[styles.filterLabel, { color: colors.text }]}
+                        >
+                          Pontos de atenção
+                        </Text>
+                        {pendingConfirmation.ambiguities.map((item, index) => (
+                          <Text
+                            key={`${item}-${index}`}
+                            style={[
+                              styles.transactionMeta,
+                              { color: colors.textMuted },
+                            ]}
+                          >
+                            • {item}
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+
+                    <View style={styles.confirmationActions}>
+                      <TouchableOpacity
+                        style={[
+                          styles.secondaryButton,
+                          {
+                            backgroundColor: colors.surfaceSecondary,
+                          },
+                        ]}
+                        onPress={resetConfirmationState}
+                        disabled={submitting}
+                      >
+                        <Text
+                          style={[
+                            styles.secondaryButtonText,
+                            { color: colors.text },
+                          ]}
+                        >
+                          Cancelar
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.button,
+                          styles.confirmPrimaryButton,
+                          { backgroundColor: colors.primary },
+                          submitting && styles.buttonDisabled,
+                        ]}
+                        onPress={handleConfirmParsedTransaction}
+                        disabled={submitting}
+                      >
+                        <Text style={styles.buttonText}>
+                          {submitting ? 'Confirmando...' : 'Salvar ajustado'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+              <View
+                style={[
+                  styles.filtersBar,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.filtersButton,
+                    { backgroundColor: colors.surfaceSecondary },
+                  ]}
+                  onPress={() => setShowFiltersModal(true)}
+                >
+                  <Text
+                    style={[styles.filtersButtonText, { color: colors.text }]}
+                  >
+                    Filtros
+                  </Text>
+                </TouchableOpacity>
+
+                {hasActiveFilters && (
+                  <TouchableOpacity
+                    style={[
+                      styles.clearFiltersButton,
+                      { backgroundColor: colors.dangerSoft },
+                    ]}
+                    onPress={() => {
+                      setSearch('');
+                      setTypeFilter('all');
+                      setCategoryFilter('Todas');
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.clearFiltersButtonText,
+                        { color: colors.danger },
+                      ]}
+                    >
+                      Limpar
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <Text style={[styles.listTitle, { color: colors.text }]}>
+                {transactionsSectionTitle}
+              </Text>
+            </>
+          }
+          ListEmptyComponent={
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+              Nenhuma transação encontrada para o período e filtros selecionados.
+            </Text>
+          }
+        />
+      </KeyboardAvoidingView>
+
+      <Modal
+        visible={showFiltersModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowFiltersModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
                 Filtros
               </Text>
 
-              <Text style={[styles.filterLabel, { color: colors.text }]}>
+              <Text style={[styles.fieldLabel, { color: colors.text }]}>
                 Busca
               </Text>
               <TextInput
@@ -1087,7 +1194,7 @@ export default function HomeScreen() {
                 onChangeText={setSearch}
               />
 
-              <Text style={[styles.filterLabel, { color: colors.text }]}>
+              <Text style={[styles.fieldLabel, { color: colors.text }]}>
                 Tipo
               </Text>
               <View style={styles.filterRow}>
@@ -1102,7 +1209,7 @@ export default function HomeScreen() {
                     <TouchableOpacity
                       key={value}
                       style={[
-                        styles.filterButton,
+                        styles.filterChip,
                         {
                           backgroundColor: active
                             ? colors.primary
@@ -1115,7 +1222,7 @@ export default function HomeScreen() {
                     >
                       <Text
                         style={[
-                          styles.filterButtonText,
+                          styles.filterChipText,
                           { color: active ? '#FFFFFF' : colors.text },
                         ]}
                       >
@@ -1126,25 +1233,21 @@ export default function HomeScreen() {
                 })}
               </View>
 
-              <Text style={[styles.filterLabel, { color: colors.text }]}>
+              <Text style={[styles.fieldLabel, { color: colors.text }]}>
                 Categoria
               </Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.categoriesRow}
-              >
+              <View style={styles.filterRow}>
                 {categories.map((category) => {
-                  const isActive = categoryFilter === category;
+                  const active = categoryFilter === category;
 
                   return (
                     <TouchableOpacity
                       key={category}
                       style={[
-                        styles.categoryChip,
+                        styles.filterChip,
                         {
-                          backgroundColor: isActive
-                            ? colors.drawerActiveBg
+                          backgroundColor: active
+                            ? colors.primary
                             : colors.surfaceSecondary,
                         },
                       ]}
@@ -1152,12 +1255,8 @@ export default function HomeScreen() {
                     >
                       <Text
                         style={[
-                          styles.categoryChipText,
-                          {
-                            color: isActive
-                              ? colors.drawerActiveText
-                              : colors.text,
-                          },
+                          styles.filterChipText,
+                          { color: active ? '#FFFFFF' : colors.text },
                         ]}
                       >
                         {category}
@@ -1165,26 +1264,56 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                   );
                 })}
-              </ScrollView>
-            </View>
+              </View>
 
-            <Text style={[styles.listTitle, { color: colors.text }]}>
-              {transactionsSectionTitle}
-            </Text>
-          </>
-        }
-        ListEmptyComponent={
-          <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-            Nenhuma transação encontrada para o período e filtros selecionados.
-          </Text>
-        }
-      />
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.secondaryButton,
+                    { backgroundColor: colors.surfaceSecondary },
+                  ]}
+                  onPress={() => {
+                    setSearch('');
+                    setTypeFilter('all');
+                    setCategoryFilter('Todas');
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.secondaryButtonText,
+                      { color: colors.text },
+                    ]}
+                  >
+                    Limpar
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.primaryButton,
+                    { backgroundColor: colors.primary },
+                  ]}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setShowFiltersModal(false);
+                  }}
+                >
+                  <Text style={styles.primaryButtonText}>Aplicar</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  keyboardContainer: {
     flex: 1,
   },
   centered: {
@@ -1324,6 +1453,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
+  primaryButton: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 16,
+  },
   buttonDisabled: {
     opacity: 0.7,
   },
@@ -1369,16 +1509,32 @@ const styles = StyleSheet.create({
   pillButtonText: {
     fontWeight: '600',
   },
-  filtersCard: {
+  filtersBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 16,
     borderRadius: 18,
     marginBottom: 16,
     borderWidth: 1,
   },
-  filtersTitle: {
-    fontSize: 18,
+  filtersButton: {
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  filtersButtonText: {
     fontWeight: '700',
-    marginBottom: 12,
+    fontSize: 15,
+  },
+  clearFiltersButton: {
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  clearFiltersButtonText: {
+    fontWeight: '700',
+    fontSize: 15,
   },
   filterLabel: {
     fontSize: 14,
@@ -1392,12 +1548,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexWrap: 'wrap',
   },
-  filterButton: {
+  filterChip: {
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  filterButtonText: {
+  filterChipText: {
     fontWeight: '600',
   },
   categoriesRow: {
@@ -1470,5 +1626,22 @@ const styles = StyleSheet.create({
   emptyText: {
     textAlign: 'center',
     marginTop: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  modalCard: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    padding: 16,
+    maxHeight: '85%',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 16,
   },
 });
