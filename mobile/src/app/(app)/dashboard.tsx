@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,6 +10,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
+import Svg, { Circle } from 'react-native-svg';
 
 import { api } from '../../services/api';
 import { useAppTheme } from '../../hooks/useAppTheme';
@@ -24,6 +27,9 @@ import type {
   MonthlyComparison,
   MonthlySummary,
 } from '../../types';
+
+type CategoryChartView = 'bars' | 'donut';
+type TrendMetric = 'income' | 'expense' | 'balance' | 'transactions';
 
 function getMonthRange(date: Date) {
   const year = date.getFullYear();
@@ -65,6 +71,105 @@ function formatDiffNumber(value: number) {
   return `${prefix}${Math.abs(value)}`;
 }
 
+function getCategoryPalette(index: number) {
+  const palette = [
+    '#2563EB',
+    '#16A34A',
+    '#EAB308',
+    '#7C3AED',
+    '#DC2626',
+    '#0891B2',
+    '#EA580C',
+    '#DB2777',
+    '#0F766E',
+    '#9333EA',
+  ];
+
+  return palette[index % palette.length];
+}
+
+function getTrendIndicator(value: number, metric: TrendMetric) {
+  if (value === 0) {
+    return { arrow: '•', tone: 'neutral' as const };
+  }
+
+  if (metric === 'income' || metric === 'balance') {
+    return value > 0
+      ? { arrow: '↑', tone: 'positive' as const }
+      : { arrow: '↓', tone: 'negative' as const };
+  }
+
+  if (metric === 'expense') {
+    return value > 0
+      ? { arrow: '↑', tone: 'negative' as const }
+      : { arrow: '↓', tone: 'positive' as const };
+  }
+
+  return value > 0
+    ? { arrow: '↑', tone: 'neutral' as const }
+    : { arrow: '↓', tone: 'neutral' as const };
+}
+
+function DonutChart({
+  data,
+  size = 190,
+  strokeWidth = 28,
+}: {
+  data: CategorySummary[];
+  size?: number;
+  strokeWidth?: number;
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const center = size / 2;
+
+  const total = data.reduce((sum, item) => sum + item.total, 0);
+
+  if (total <= 0) {
+    return null;
+  }
+
+  let accumulatedPercent = 0;
+
+  return (
+    <Svg width={size} height={size}>
+      <Circle
+        cx={center}
+        cy={center}
+        r={radius}
+        stroke="#E5E7EB"
+        strokeWidth={strokeWidth}
+        fill="none"
+      />
+
+      {data.map((item, index) => {
+        const percent = item.total / total;
+        const dashLength = circumference * percent;
+        const dashGap = circumference - dashLength;
+        const rotation = accumulatedPercent * 360 - 90;
+
+        accumulatedPercent += percent;
+
+        return (
+          <Circle
+            key={item.category}
+            cx={center}
+            cy={center}
+            r={radius}
+            stroke={getCategoryPalette(index)}
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={`${dashLength} ${dashGap}`}
+            strokeLinecap="butt"
+            origin={`${center}, ${center}`}
+            rotation={rotation}
+          />
+        );
+      })}
+    </Svg>
+  );
+}
+
 export default function DashboardScreen() {
   const { colors } = useAppTheme();
 
@@ -79,8 +184,12 @@ export default function DashboardScreen() {
   const [comparison, setComparison] = useState<MonthlyComparison | null>(null);
   const [dailySummary, setDailySummary] = useState<DailySummaryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [closingMonth, setClosingMonth] = useState(false);
   const [reopeningMonth, setReopeningMonth] = useState(false);
+
+  const [categoryChartView, setCategoryChartView] =
+    useState<CategoryChartView>('bars');
 
   const period = useMemo(() => getMonthRange(selectedMonth), [selectedMonth]);
 
@@ -143,6 +252,15 @@ export default function DashboardScreen() {
     }
   }
 
+  async function handleRefresh() {
+    try {
+      setRefreshing(true);
+      await loadDashboard(false);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   useEffect(() => {
     loadDashboard(true);
   }, []);
@@ -150,6 +268,12 @@ export default function DashboardScreen() {
   useEffect(() => {
     loadDashboard(false);
   }, [period.startDate, period.endDate]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboard(false);
+    }, [period.startDate, period.endDate])
+  );
 
   function goToPreviousMonth() {
     setSelectedMonth((current) => {
@@ -279,6 +403,84 @@ export default function DashboardScreen() {
     [dailySummary]
   );
 
+  const topCategory = useMemo(() => {
+    if (!categories.length) return null;
+
+    return categories.reduce((top, current) =>
+      current.total > top.total ? current : top
+    );
+  }, [categories]);
+
+  const categoriesTotal = useMemo(
+    () => categories.reduce((sum, item) => sum + item.total, 0),
+    [categories]
+  );
+
+  const biggestExpenseDay = useMemo(() => {
+    if (!meaningfulDailySummary.length) return null;
+
+    return meaningfulDailySummary.reduce((top, current) =>
+      current.totalExpenses > top.totalExpenses ? current : top
+    );
+  }, [meaningfulDailySummary]);
+
+  const totalMoved = useMemo(() => {
+    return (summary?.totalIncomes ?? 0) + (summary?.totalExpenses ?? 0);
+  }, [summary]);
+
+  const averageTicket = useMemo(() => {
+    if (!summary?.totalTransactions || summary.totalTransactions <= 0) {
+      return 0;
+    }
+
+    return totalMoved / summary.totalTransactions;
+  }, [summary, totalMoved]);
+
+  const balanceDirectionText = useMemo(() => {
+    if (!comparison) return null;
+
+    if (comparison.diff.balance > 0) {
+      return 'Seu saldo melhorou em relação ao mês anterior.';
+    }
+
+    if (comparison.diff.balance < 0) {
+      return 'Seu saldo caiu em relação ao mês anterior.';
+    }
+
+    return 'Seu saldo ficou estável em relação ao mês anterior.';
+  }, [comparison]);
+
+  const incomeTrend = comparison
+    ? getTrendIndicator(comparison.diff.totalIncomes, 'income')
+    : null;
+  const expenseTrend = comparison
+    ? getTrendIndicator(comparison.diff.totalExpenses, 'expense')
+    : null;
+  const balanceTrend = comparison
+    ? getTrendIndicator(comparison.diff.balance, 'balance')
+    : null;
+  const transactionsTrend = comparison
+    ? getTrendIndicator(comparison.diff.totalTransactions, 'transactions')
+    : null;
+
+  function getTrendColor(
+    tone: 'positive' | 'negative' | 'neutral' | undefined
+  ) {
+    if (tone === 'positive') return colors.success;
+    if (tone === 'negative') return colors.danger;
+    return colors.textMuted;
+  }
+
+  const balancePercentChange = useMemo(() => {
+    if (!comparison) return null;
+
+    const previous = comparison.previous.balance;
+
+    if (previous === 0) return null;
+
+    return (comparison.diff.balance / Math.abs(previous)) * 100;
+  }, [comparison]);
+
   if (loading) {
     return (
       <SafeAreaView
@@ -300,6 +502,9 @@ export default function DashboardScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
       >
         <View
           style={[
@@ -484,6 +689,143 @@ export default function DashboardScreen() {
           ]}
         >
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Insights do período
+          </Text>
+
+          <View style={styles.insightsGrid}>
+            <View
+              style={[
+                styles.insightCard,
+                {
+                  backgroundColor: colors.surfaceSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.insightLabel, { color: colors.textMuted }]}>
+                Maior categoria
+              </Text>
+              <Text style={[styles.insightValue, { color: colors.text }]}>
+                {topCategory?.category ?? 'Sem dados'}
+              </Text>
+              <Text style={[styles.insightMeta, { color: colors.textMuted }]}>
+                {topCategory
+                  ? formatCurrency(topCategory.total)
+                  : 'Nenhuma despesa registrada'}
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.insightCard,
+                {
+                  backgroundColor: colors.surfaceSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.insightLabel, { color: colors.textMuted }]}>
+                Dia mais caro
+              </Text>
+              <Text style={[styles.insightValue, { color: colors.text }]}>
+                {biggestExpenseDay
+                  ? formatDateBR(`${biggestExpenseDay.date}T00:00:00`)
+                  : 'Sem dados'}
+              </Text>
+              <Text style={[styles.insightMeta, { color: colors.textMuted }]}>
+                {biggestExpenseDay
+                  ? formatCurrency(biggestExpenseDay.totalExpenses)
+                  : 'Nenhuma despesa registrada'}
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.insightCard,
+                {
+                  backgroundColor: colors.surfaceSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.insightLabel, { color: colors.textMuted }]}>
+                Total movimentado
+              </Text>
+              <Text style={[styles.insightValue, { color: colors.text }]}>
+                {formatCurrency(totalMoved)}
+              </Text>
+              <Text style={[styles.insightMeta, { color: colors.textMuted }]}>
+                Soma de receitas e despesas
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.insightCard,
+                {
+                  backgroundColor: colors.surfaceSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.insightLabel, { color: colors.textMuted }]}>
+                Ticket médio
+              </Text>
+              <Text style={[styles.insightValue, { color: colors.text }]}>
+                {formatCurrency(averageTicket)}
+              </Text>
+              <Text style={[styles.insightMeta, { color: colors.textMuted }]}>
+                Valor médio por transação
+              </Text>
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.highlightInsightBox,
+              {
+                backgroundColor: colors.primarySoft ?? colors.surfaceSecondary,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.highlightInsightTitle, { color: colors.text }]}>
+              Leitura rápida do mês
+            </Text>
+            <Text
+              style={[styles.highlightInsightText, { color: colors.textMuted }]}
+            >
+              {balanceDirectionText ??
+                'Ainda não há dados suficientes para gerar um insight comparativo.'}
+            </Text>
+
+            {balancePercentChange !== null && (
+              <Text
+                style={[
+                  styles.highlightInsightPercent,
+                  {
+                    color:
+                      balancePercentChange >= 0 ? colors.success : colors.danger,
+                  },
+                ]}
+              >
+                {balancePercentChange >= 0 ? '↑' : '↓'}{' '}
+                {Math.abs(balancePercentChange).toFixed(1)}% no saldo
+              </Text>
+            )}
+          </View>
+        </View>
+
+        <View
+          style={[
+            styles.sectionCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Comparativo com mês anterior
           </Text>
 
@@ -506,15 +848,10 @@ export default function DashboardScreen() {
                 <Text
                   style={[
                     styles.comparisonDiff,
-                    {
-                      color:
-                        comparison.diff.totalIncomes >= 0
-                          ? colors.success
-                          : colors.danger,
-                    },
+                    { color: getTrendColor(incomeTrend?.tone) },
                   ]}
                 >
-                  {formatDiffCurrency(comparison.diff.totalIncomes)}
+                  {incomeTrend?.arrow} {formatDiffCurrency(comparison.diff.totalIncomes)}
                 </Text>
               </View>
 
@@ -528,15 +865,10 @@ export default function DashboardScreen() {
                 <Text
                   style={[
                     styles.comparisonDiff,
-                    {
-                      color:
-                        comparison.diff.totalExpenses <= 0
-                          ? colors.success
-                          : colors.danger,
-                    },
+                    { color: getTrendColor(expenseTrend?.tone) },
                   ]}
                 >
-                  {formatDiffCurrency(comparison.diff.totalExpenses)}
+                  {expenseTrend?.arrow} {formatDiffCurrency(comparison.diff.totalExpenses)}
                 </Text>
               </View>
 
@@ -550,15 +882,10 @@ export default function DashboardScreen() {
                 <Text
                   style={[
                     styles.comparisonDiff,
-                    {
-                      color:
-                        comparison.diff.balance >= 0
-                          ? colors.success
-                          : colors.danger,
-                    },
+                    { color: getTrendColor(balanceTrend?.tone) },
                   ]}
                 >
-                  {formatDiffCurrency(comparison.diff.balance)}
+                  {balanceTrend?.arrow} {formatDiffCurrency(comparison.diff.balance)}
                 </Text>
               </View>
 
@@ -572,10 +899,10 @@ export default function DashboardScreen() {
                 <Text
                   style={[
                     styles.comparisonDiff,
-                    { color: colors.textMuted },
+                    { color: getTrendColor(transactionsTrend?.tone) },
                   ]}
                 >
-                  {formatDiffNumber(comparison.diff.totalTransactions)}
+                  {transactionsTrend?.arrow} {formatDiffNumber(comparison.diff.totalTransactions)}
                 </Text>
               </View>
             </>
@@ -657,27 +984,99 @@ export default function DashboardScreen() {
             },
           ]}
         >
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Gastos por categoria
-          </Text>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.sectionTitleNoMargin, { color: colors.text }]}>
+                Gastos por categoria
+              </Text>
+              {topCategory && (
+                <Text style={[styles.topCategoryText, { color: colors.textMuted }]}>
+                  Maior gasto: {topCategory.category} — {formatCurrency(topCategory.total)}
+                </Text>
+              )}
+            </View>
+
+            <View
+              style={[
+                styles.pillSelectorContainer,
+                {
+                  backgroundColor: colors.surfaceSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.pillSelectorButton,
+                  categoryChartView === 'bars' && {
+                    backgroundColor: colors.primary,
+                  },
+                ]}
+                onPress={() => setCategoryChartView('bars')}
+              >
+                <Text
+                  style={[
+                    styles.pillSelectorText,
+                    {
+                      color:
+                        categoryChartView === 'bars' ? '#FFFFFF' : colors.text,
+                    },
+                  ]}
+                >
+                  Barras
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.pillSelectorButton,
+                  categoryChartView === 'donut' && {
+                    backgroundColor: colors.primary,
+                  },
+                ]}
+                onPress={() => setCategoryChartView('donut')}
+              >
+                <Text
+                  style={[
+                    styles.pillSelectorText,
+                    {
+                      color:
+                        categoryChartView === 'donut' ? '#FFFFFF' : colors.text,
+                    },
+                  ]}
+                >
+                  Rosquinha
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
           {categories.length === 0 ? (
             <Text style={[styles.emptyText, { color: colors.textMuted }]}>
               Não há despesas nesse período para exibir no dashboard.
             </Text>
-          ) : (
-            categories.map((item) => {
+          ) : categoryChartView === 'bars' ? (
+            categories.map((item, index) => {
               const widthPercent =
                 maxCategoryTotal > 0 ? (item.total / maxCategoryTotal) * 100 : 0;
 
               return (
                 <View key={item.category} style={styles.categoryItem}>
                   <View style={styles.categoryHeader}>
-                    <Text
-                      style={[styles.categoryName, { color: colors.text }]}
-                    >
-                      {item.category}
-                    </Text>
+                    <View style={styles.categoryNameRow}>
+                      <View
+                        style={[
+                          styles.categoryDot,
+                          { backgroundColor: getCategoryPalette(index) },
+                        ]}
+                      />
+                      <Text
+                        style={[styles.categoryName, { color: colors.text }]}
+                      >
+                        {item.category}
+                      </Text>
+                    </View>
+
                     <Text
                       style={[styles.categoryTotal, { color: colors.text }]}
                     >
@@ -695,7 +1094,7 @@ export default function DashboardScreen() {
                       style={[
                         styles.categoryBarFill,
                         {
-                          backgroundColor: colors.primary,
+                          backgroundColor: getCategoryPalette(index),
                           width: `${Math.max(widthPercent, 8)}%`,
                         },
                       ]}
@@ -710,6 +1109,54 @@ export default function DashboardScreen() {
                 </View>
               );
             })
+          ) : (
+            <>
+              <View style={styles.donutWrapper}>
+                <DonutChart data={categories} />
+                <View style={styles.donutCenter}>
+                  <Text style={[styles.donutCenterLabel, { color: colors.textMuted }]}>
+                    Total
+                  </Text>
+                  <Text style={[styles.donutCenterValue, { color: colors.text }]}>
+                    {formatCurrency(categoriesTotal)}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.legendContainer}>
+                {categories.map((item, index) => {
+                  const percentage =
+                    categoriesTotal > 0 ? (item.total / categoriesTotal) * 100 : 0;
+
+                  return (
+                    <View key={item.category} style={styles.legendItem}>
+                      <View style={styles.legendLeft}>
+                        <View
+                          style={[
+                            styles.categoryDot,
+                            { backgroundColor: getCategoryPalette(index) },
+                          ]}
+                        />
+                        <Text style={[styles.legendText, { color: colors.text }]}>
+                          {item.category}
+                        </Text>
+                      </View>
+
+                      <View style={styles.legendRight}>
+                        <Text style={[styles.legendValue, { color: colors.text }]}>
+                          {formatCurrency(item.total)}
+                        </Text>
+                        <Text
+                          style={[styles.legendPercentage, { color: colors.textMuted }]}
+                        >
+                          {percentage.toFixed(1)}%
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </>
           )}
         </View>
 
@@ -880,6 +1327,81 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 14,
   },
+  sectionTitleNoMargin: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 14,
+  },
+  topCategoryText: {
+    marginTop: 4,
+    fontSize: 13,
+  },
+  insightsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  insightCard: {
+    width: '48%',
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+  },
+  insightLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  insightValue: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  insightMeta: {
+    fontSize: 12,
+    marginTop: 6,
+    lineHeight: 18,
+  },
+  highlightInsightBox: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+  },
+  highlightInsightTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  highlightInsightText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  highlightInsightPercent: {
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  pillSelectorContainer: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderRadius: 999,
+    padding: 4,
+    gap: 4,
+  },
+  pillSelectorButton: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  pillSelectorText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   comparisonSubtitle: {
     fontSize: 13,
     marginBottom: 4,
@@ -943,6 +1465,17 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 8,
   },
+  categoryNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  categoryDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
   categoryName: {
     fontSize: 15,
     fontWeight: '600',
@@ -964,6 +1497,59 @@ const styles = StyleSheet.create({
   categoryCount: {
     fontSize: 12,
     marginTop: 6,
+  },
+  donutWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    position: 'relative',
+    minHeight: 210,
+  },
+  donutCenter: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  donutCenterLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  donutCenterValue: {
+    marginTop: 4,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  legendContainer: {
+    gap: 10,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    alignItems: 'center',
+  },
+  legendLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  legendRight: {
+    alignItems: 'flex-end',
+  },
+  legendText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  legendValue: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  legendPercentage: {
+    fontSize: 12,
+    marginTop: 2,
   },
   closureCard: {
     borderWidth: 1,

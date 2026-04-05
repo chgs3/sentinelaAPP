@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -40,7 +43,7 @@ export default function RegisterScreen() {
       await saveToken(response.data.token);
 
       Alert.alert('Sucesso', 'Conta criada com sucesso.');
-      router.replace('/home');
+      router.replace('/login');
     } catch (error: any) {
       console.error(error);
 
@@ -58,88 +61,101 @@ export default function RegisterScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={['top', 'bottom']}
     >
-      <View
-        style={[
-          styles.card,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-          },
-        ]}
+      <KeyboardAvoidingView
+        style={styles.keyboardContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Text style={[styles.title, { color: colors.text }]}>Criar conta</Text>
-        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-          Comece a usar o Sentinela.
-        </Text>
-
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.inputBackground,
-              borderColor: colors.border,
-              color: colors.text,
-            },
-          ]}
-          placeholder="Nome"
-          placeholderTextColor={colors.textMuted}
-          value={name}
-          onChangeText={setName}
-        />
-
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.inputBackground,
-              borderColor: colors.border,
-              color: colors.text,
-            },
-          ]}
-          placeholder="Email"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.inputBackground,
-              borderColor: colors.border,
-              color: colors.text,
-            },
-          ]}
-          placeholder="Senha"
-          placeholderTextColor={colors.textMuted}
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-
-        <TouchableOpacity
-          style={[
-            styles.button,
-            { backgroundColor: colors.primary },
-            submitting && styles.buttonDisabled,
-          ]}
-          onPress={handleRegister}
-          disabled={submitting}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.buttonText}>
-            {submitting ? 'Criando...' : 'Criar conta'}
-          </Text>
-        </TouchableOpacity>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.title, { color: colors.text }]}>
+              Criar conta
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+              Comece a usar o Sentinela.
+            </Text>
 
-        <TouchableOpacity onPress={() => router.push('/login')}>
-          <Text style={[styles.link, { color: colors.primary }]}>
-            Já tenho conta
-          </Text>
-        </TouchableOpacity>
-      </View>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="Nome"
+              placeholderTextColor={colors.textMuted}
+              value={name}
+              onChangeText={setName}
+            />
+
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="Email"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+            />
+
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="Senha"
+              placeholderTextColor={colors.textMuted}
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+            />
+
+            <TouchableOpacity
+              style={[
+                styles.button,
+                { backgroundColor: colors.primary },
+                submitting && styles.buttonDisabled,
+              ]}
+              onPress={handleRegister}
+              disabled={submitting}
+            >
+              <Text style={styles.buttonText}>
+                {submitting ? 'Criando...' : 'Criar conta'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => router.push('/login')}>
+              <Text style={[styles.link, { color: colors.primary }]}>
+                Já tenho conta
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -147,6 +163,12 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  keyboardContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 16,
   },

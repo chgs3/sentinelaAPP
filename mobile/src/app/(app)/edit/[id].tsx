@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -173,224 +175,240 @@ export default function EditTransactionScreen() {
       edges={['bottom']}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <ScrollView contentContainerStyle={styles.content}>
-        <View
-          style={[
-            styles.card,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-            },
-          ]}
+      <KeyboardAvoidingView
+        style={styles.keyboardContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={[styles.title, { color: colors.text }]}>
-            Editar transação
-          </Text>
-
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>Tipo</Text>
-          <View style={styles.segmentRow}>
-            <TouchableOpacity
-              style={[
-                styles.segmentButton,
-                {
-                  backgroundColor:
-                    type === 'expense' ? colors.primary : colors.surfaceSecondary,
-                },
-              ]}
-              onPress={() => setType('expense')}
-            >
-              <Text
-                style={[
-                  styles.segmentButtonText,
-                  {
-                    color: type === 'expense' ? '#FFFFFF' : colors.text,
-                  },
-                ]}
-              >
-                Despesa
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.segmentButton,
-                {
-                  backgroundColor:
-                    type === 'income' ? colors.primary : colors.surfaceSecondary,
-                },
-              ]}
-              onPress={() => setType('income')}
-            >
-              <Text
-                style={[
-                  styles.segmentButtonText,
-                  {
-                    color: type === 'income' ? '#FFFFFF' : colors.text,
-                  },
-                ]}
-              >
-                Receita
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>Valor</Text>
-          <TextInput
+          <View
             style={[
-              styles.input,
+              styles.card,
               {
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.border,
-                color: colors.text,
-              },
-            ]}
-            placeholder="Valor"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="numeric"
-            value={amount}
-            onChangeText={setAmount}
-          />
-
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>
-            Descrição
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.border,
-                color: colors.text,
-              },
-            ]}
-            placeholder="Descrição"
-            placeholderTextColor={colors.textMuted}
-            value={description}
-            onChangeText={setDescription}
-          />
-
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>
-            Categoria
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.border,
-                color: colors.text,
-              },
-            ]}
-            placeholder="Categoria"
-            placeholderTextColor={colors.textMuted}
-            value={category}
-            onChangeText={setCategory}
-          />
-
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>Data</Text>
-          <TouchableOpacity
-            style={[
-              styles.inputButton,
-              {
-                backgroundColor: colors.inputBackground,
+                backgroundColor: colors.surface,
                 borderColor: colors.border,
               },
             ]}
-            onPress={() => setShowDatePicker(true)}
           >
-            <Text style={{ color: colors.text }}>
-              {transactionAt.toLocaleDateString('pt-BR')}
+            <Text style={[styles.title, { color: colors.text }]}>
+              Editar transação
             </Text>
-          </TouchableOpacity>
 
-          {showDatePicker && (
-            <DateTimePicker
-              value={transactionAt}
-              mode="date"
-              display="default"
-              onChange={handleDateChange}
-            />
-          )}
-
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>
-            Forma de pagamento
-          </Text>
-
-          <Text style={[styles.currentPaymentText, { color: colors.textMuted }]}>
-            Atual: {formatPaymentMethod(paymentMethod)}
-          </Text>
-
-          <View style={styles.segmentRowWrap}>
-            {paymentMethodOptions.map((option) => {
-              const active = paymentMethod === option.value;
-
-              return (
-                <TouchableOpacity
-                  key={option.label}
-                  style={[
-                    styles.pillButton,
-                    {
-                      backgroundColor: active
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Tipo</Text>
+            <View style={styles.segmentRow}>
+              <TouchableOpacity
+                style={[
+                  styles.segmentButton,
+                  {
+                    backgroundColor:
+                      type === 'expense'
                         ? colors.primary
                         : colors.surfaceSecondary,
+                  },
+                ]}
+                onPress={() => setType('expense')}
+              >
+                <Text
+                  style={[
+                    styles.segmentButtonText,
+                    {
+                      color: type === 'expense' ? '#FFFFFF' : colors.text,
                     },
                   ]}
-                  onPress={() => setPaymentMethod(option.value)}
                 >
-                  <Text
+                  Despesa
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.segmentButton,
+                  {
+                    backgroundColor:
+                      type === 'income'
+                        ? colors.primary
+                        : colors.surfaceSecondary,
+                  },
+                ]}
+                onPress={() => setType('income')}
+              >
+                <Text
+                  style={[
+                    styles.segmentButtonText,
+                    {
+                      color: type === 'income' ? '#FFFFFF' : colors.text,
+                    },
+                  ]}
+                >
+                  Receita
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Valor</Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="Valor"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
+              value={amount}
+              onChangeText={setAmount}
+            />
+
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>
+              Descrição
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="Descrição"
+              placeholderTextColor={colors.textMuted}
+              value={description}
+              onChangeText={setDescription}
+            />
+
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>
+              Categoria
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="Categoria"
+              placeholderTextColor={colors.textMuted}
+              value={category}
+              onChangeText={setCategory}
+            />
+
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Data</Text>
+            <TouchableOpacity
+              style={[
+                styles.inputButton,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                },
+              ]}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={{ color: colors.text }}>
+                {transactionAt.toLocaleDateString('pt-BR')}
+              </Text>
+            </TouchableOpacity>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={transactionAt}
+                mode="date"
+                display="default"
+                onChange={handleDateChange}
+              />
+            )}
+
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>
+              Forma de pagamento
+            </Text>
+
+            <Text style={[styles.currentPaymentText, { color: colors.textMuted }]}>
+              Atual: {formatPaymentMethod(paymentMethod)}
+            </Text>
+
+            <View style={styles.segmentRowWrap}>
+              {paymentMethodOptions.map((option) => {
+                const active = paymentMethod === option.value;
+
+                return (
+                  <TouchableOpacity
+                    key={option.label}
                     style={[
-                      styles.pillButtonText,
+                      styles.pillButton,
                       {
-                        color: active ? '#FFFFFF' : colors.text,
+                        backgroundColor: active
+                          ? colors.primary
+                          : colors.surfaceSecondary,
                       },
                     ]}
+                    onPress={() => setPaymentMethod(option.value)}
                   >
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                    <Text
+                      style={[
+                        styles.pillButtonText,
+                        {
+                          color: active ? '#FFFFFF' : colors.text,
+                        },
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>
-            Conta/Cartão
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.border,
-                color: colors.text,
-              },
-            ]}
-            placeholder="Conta ou cartão"
-            placeholderTextColor={colors.textMuted}
-            value={accountOrCard}
-            onChangeText={setAccountOrCard}
-          />
-
-          <TouchableOpacity
-            style={[
-              styles.saveButton,
-              { backgroundColor: colors.primary },
-              saving && styles.buttonDisabled,
-            ]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            <Text style={styles.saveButtonText}>
-              {saving ? 'Salvando...' : 'Salvar alterações'}
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>
+              Conta/Cartão
             </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="Conta ou cartão"
+              placeholderTextColor={colors.textMuted}
+              value={accountOrCard}
+              onChangeText={setAccountOrCard}
+            />
+
+            <TouchableOpacity
+              style={[
+                styles.saveButton,
+                { backgroundColor: colors.primary },
+                saving && styles.buttonDisabled,
+              ]}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              <Text style={styles.saveButtonText}>
+                {saving ? 'Salvando...' : 'Salvar alterações'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  keyboardContainer: {
     flex: 1,
   },
   content: {
