@@ -5,6 +5,7 @@ import messageRoutes from './messageRoutes';
 import summaryRoutes from './summaryRoutes';
 import debtRoutes from './debtRoutes';
 import monthlyClosureRoutes from './monthlyClosureRoutes';
+import supportRoutes from './supportRoutes';
 import authMiddleware from '../middlewares/authMiddleware';
 
 const routes = Router();
@@ -23,5 +24,6 @@ routes.use('/messages', messageRoutes);
 routes.use('/summary', summaryRoutes);
 routes.use('/debts', debtRoutes);
 routes.use('/monthly-closures', monthlyClosureRoutes);
+routes.use('/support', supportRoutes);
 
 export default routes;

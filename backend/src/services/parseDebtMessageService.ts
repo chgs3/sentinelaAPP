@@ -38,10 +38,37 @@ function cleanupPersonName(value: string) {
 function cleanupDescription(value?: string) {
   const cleaned = (value ?? '')
     .replace(/^[,.\-:\s]+/, '')
-    .replace(/^(do|da|de|para|pra|pro)\s+/i, '')
+    .replace(/[,.\-:\s]+$/, '')
+    .replace(/^(do|da|de|para|pra|pro|por|pela|pelo)\s+/i, '')
     .trim();
 
   return cleaned.length ? cleaned : 'Dívida registrada';
+}
+
+function looksLikePurposeWord(value: string) {
+  const normalized = normalizeText(value);
+
+  return [
+    'aluguel',
+    'viagem',
+    'almoco',
+    'almoço',
+    'lanche',
+    'pizza',
+    'mercado',
+    'faculdade',
+    'curso',
+    'uber',
+    'ifood',
+    'gasolina',
+    'presente',
+    'internet',
+    'agua',
+    'água',
+    'energia',
+    'condominio',
+    'condomínio',
+  ].includes(normalized);
 }
 
 function splitPersonAndDescription(
@@ -49,19 +76,51 @@ function splitPersonAndDescription(
 ): { personName: string; description: string } {
   const trimmed = raw.trim();
 
-  const withDescription = trimmed.match(/^(.+?)\s+(?:do|da|de)\s+(.+)$/i);
+  const fullMatch = trimmed.match(/^(.+?)\s+(?:do|da|de)\s+(.+)$/i);
 
-  if (withDescription) {
+  if (!fullMatch) {
     return {
-      personName: cleanupPersonName(withDescription[1]),
-      description: cleanupDescription(withDescription[2]),
+      personName: cleanupPersonName(trimmed),
+      description: 'Dívida registrada',
+    };
+  }
+
+  const left = cleanupPersonName(fullMatch[1]);
+  const right = cleanupDescription(fullMatch[2]);
+
+  if (!left) {
+    return {
+      personName: '',
+      description: right || 'Dívida registrada',
+    };
+  }
+
+  const leftTokens = left.split(/\s+/).filter(Boolean);
+  const rightTokens = right.split(/\s+/).filter(Boolean);
+
+  if (leftTokens.length === 1 && rightTokens.length >= 1 && looksLikePurposeWord(rightTokens[0])) {
+    return {
+      personName: left,
+      description: right,
+    };
+  }
+
+  if (leftTokens.length >= 2) {
+    return {
+      personName: left,
+      description: right || 'Dívida registrada',
     };
   }
 
   return {
-    personName: cleanupPersonName(trimmed),
-    description: 'Dívida registrada',
+    personName: left,
+    description: right || 'Dívida registrada',
   };
+}
+
+function extractTrailingDescription(value: string) {
+  const cleaned = cleanupDescription(value);
+  return cleaned || 'Dívida registrada';
 }
 
 class ParseDebtMessageService {
@@ -86,7 +145,7 @@ class ParseDebtMessageService {
 
       if (match) {
         const personName = cleanupPersonName(match[1]);
-        const description = cleanupDescription(match[2]);
+        const description = extractTrailingDescription(match[2]);
 
         if (!personName) return null;
 
@@ -135,7 +194,7 @@ class ParseDebtMessageService {
         if (!personName) return null;
 
         const descMatch = after.match(/^\d+(?:[.,]\d{1,2})?\s*(.*)$/i);
-        const description = cleanupDescription(descMatch?.[1]);
+        const description = extractTrailingDescription(descMatch?.[1]);
 
         return {
           personName,

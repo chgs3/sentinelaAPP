@@ -10,6 +10,41 @@ function normalizeText(value: string) {
     .toLowerCase();
 }
 
+function hasAny(text: string, items: string[]) {
+  return items.some((item) => text.includes(item));
+}
+
+function isGenericDescription(description: string) {
+  const normalized = normalizeText(description);
+
+  return [
+    'pagamento',
+    'recebimento',
+    'pagamento via pix',
+    'recebimento via pix',
+    'transferencia entre contas',
+    'transferência entre contas',
+  ].includes(normalized);
+}
+
+function isShortButClearMessage(normalized: string) {
+  const strongCategoryShortcuts = [
+    'uber',
+    '99',
+    'ifood',
+    'mercado',
+    'farmacia',
+    'farmácia',
+    'salario',
+    'salário',
+    'freela',
+    'gasolina',
+    'aluguel',
+  ];
+
+  return strongCategoryShortcuts.some((item) => normalized.includes(item));
+}
+
 export function decideParseOutcome(
   message: string,
   parsed: ParsedTransaction | null
@@ -24,34 +59,74 @@ export function decideParseOutcome(
 
   const normalized = normalizeText(message);
   const ambiguities: string[] = [];
+  const criticalAmbiguities: string[] = [];
 
-  const explicitIncome =
-    normalized.includes('recebi') ||
-    normalized.includes('ganhei') ||
-    normalized.includes('entrou') ||
-    normalized.includes('entrada') ||
-    normalized.includes('caiu') ||
-    normalized.includes('me pagaram');
+  const explicitIncome = hasAny(normalized, [
+    'recebi',
+    'ganhei',
+    'entrou',
+    'entrada',
+    'caiu',
+    'me pagaram',
+    'depositaram',
+    'salario',
+    'salário',
+    'freela',
+    'freelance',
+    'reembolso',
+  ]);
 
-  const explicitExpense =
-    normalized.includes('gastei') ||
-    normalized.includes('paguei') ||
-    normalized.includes('comprei') ||
-    normalized.includes('gasto') ||
-    normalized.includes('pago') ||
-    normalized.includes('usei');
+  const explicitExpense = hasAny(normalized, [
+    'gastei',
+    'paguei',
+    'comprei',
+    'gasto',
+    'pago',
+    'usei',
+    'fatura',
+    'boleto',
+  ]);
 
-  const explicitTransfer =
-    normalized.includes('transferi') ||
-    normalized.includes('transferencia') ||
-    normalized.includes('transferência') ||
-    normalized.includes('enviei') ||
-    normalized.includes('mandei') ||
-    normalized.includes('passei') ||
-    normalized.includes('entre contas') ||
-    normalized.includes('minha outra conta');
+  const explicitTransfer = hasAny(normalized, [
+    'transferi',
+    'transferencia',
+    'transferência',
+    'enviei',
+    'mandei',
+    'passei',
+    'entre contas',
+    'minha outra conta',
+    'para minha conta',
+    'pra minha conta',
+    'de uma conta para outra',
+  ]);
 
-  if (parsed.possibleTransfer || explicitTransfer) {
+  const weakPixMessage =
+    normalized.includes('pix') && !explicitIncome && !explicitExpense && !explicitTransfer;
+
+  const reallyLooksLikeTransfer =
+    explicitTransfer ||
+    (parsed.possibleTransfer &&
+      hasAny(normalized, ['pro ', 'pra ', 'para ']) &&
+      hasAny(normalized, [
+        'nubank',
+        'inter',
+        'picpay',
+        'caixa',
+        'itau',
+        'itaú',
+        'bradesco',
+        'santander',
+        'banco do brasil',
+        'mercado pago',
+        'next',
+        'c6',
+        'neon',
+        'wise',
+        'paypal',
+      ]));
+
+  if (reallyLooksLikeTransfer) {
     return {
       status: 'ignored_transfer',
       reason:
@@ -60,7 +135,7 @@ export function decideParseOutcome(
     };
   }
 
-  if (!explicitIncome && !explicitExpense && normalized.includes('pix')) {
+  if (weakPixMessage) {
     ambiguities.push('Mensagem com Pix, mas sem contexto claro de entrada ou saída.');
   }
 
@@ -68,40 +143,62 @@ export function decideParseOutcome(
     ambiguities.push('Categoria muito genérica.');
   }
 
-  if (
-    parsed.description === 'Pagamento' ||
-    parsed.description === 'Recebimento' ||
-    parsed.description === 'Pagamento via Pix' ||
-    parsed.description === 'Recebimento via Pix'
-  ) {
+  if (isGenericDescription(parsed.description)) {
     ambiguities.push('Descrição pouco específica.');
   }
 
   if (explicitIncome && parsed.type !== 'income') {
-    ambiguities.push('A mensagem parece receita, mas a classificação ficou diferente.');
+    criticalAmbiguities.push(
+      'A mensagem parece receita, mas a classificação ficou diferente.'
+    );
   }
 
   if (explicitExpense && parsed.type !== 'expense') {
-    ambiguities.push('A mensagem parece despesa, mas a classificação ficou diferente.');
+    criticalAmbiguities.push(
+      'A mensagem parece despesa, mas a classificação ficou diferente.'
+    );
   }
 
-  if (parsed.confidence < 0.45) {
+  if (!explicitIncome && !explicitExpense && !weakPixMessage) {
+    if (
+      normalized.split(/\s+/).filter(Boolean).length <= 2 &&
+      !isShortButClearMessage(normalized)
+    ) {
+      ambiguities.push('Mensagem curta demais para interpretação totalmente segura.');
+    }
+  }
+
+  if (parsed.confidence < 0.4) {
+    criticalAmbiguities.push('Confiança muito baixa da interpretação.');
+  } else if (parsed.confidence < 0.58) {
     ambiguities.push('Confiança baixa da interpretação.');
   }
 
-  if (parsed.confidence < 0.45) {
+  const allAmbiguities = [...criticalAmbiguities, ...ambiguities];
+
+  if (criticalAmbiguities.length > 0) {
     return {
       status: 'unable_to_parse',
       reason: 'Não foi possível interpretar a mensagem com segurança.',
-      ambiguities,
+      ambiguities: allAmbiguities,
     };
   }
 
-  if (ambiguities.length > 0 || parsed.confidence < 0.72) {
+  if (parsed.confidence < 0.5 && !isShortButClearMessage(normalized)) {
+    return {
+      status: 'unable_to_parse',
+      reason: 'Não foi possível interpretar a mensagem com segurança.',
+      ambiguities: allAmbiguities.length
+        ? allAmbiguities
+        : ['Confiança insuficiente para salvar automaticamente.'],
+    };
+  }
+
+  if (allAmbiguities.length > 0 || parsed.confidence < 0.74) {
     return {
       status: 'needs_confirmation',
       reason: 'A interpretação exige confirmação antes de salvar.',
-      ambiguities,
+      ambiguities: allAmbiguities,
     };
   }
 

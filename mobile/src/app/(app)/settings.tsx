@@ -7,6 +7,8 @@ import { useAppTheme } from '../../hooks/useAppTheme';
 export default function SettingsScreen() {
   const { colors, mode, toggleThemeMode } = useAppTheme();
 
+  const isDark = mode === 'dark';
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -16,10 +18,36 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={[styles.title, { color: colors.text }]}>Configurações</Text>
-        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-          Personalize o Sentinela do seu jeito.
-        </Text>
+        <View
+          style={[
+            styles.heroCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.heroIcon,
+              { backgroundColor: colors.primarySoft ?? colors.surfaceSecondary },
+            ]}
+          >
+            <Ionicons
+              name="settings-outline"
+              size={24}
+              color={colors.primary}
+            />
+          </View>
+
+          <Text style={[styles.title, { color: colors.text }]}>
+            Configurações
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+            Personalize o visual do Sentinela e acompanhe as preferências
+            disponíveis do aplicativo.
+          </Text>
+        </View>
 
         <View
           style={[
@@ -34,7 +62,7 @@ export default function SettingsScreen() {
             <View
               style={[
                 styles.sectionIcon,
-                { backgroundColor: colors.primarySoft },
+                { backgroundColor: colors.primarySoft ?? colors.surfaceSecondary },
               ]}
             >
               <Ionicons
@@ -48,59 +76,79 @@ export default function SettingsScreen() {
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
                 Aparência
               </Text>
-              <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>
-                Ajuste o visual do app.
+              <Text
+                style={[styles.sectionDescription, { color: colors.textMuted }]}
+              >
+                Ajuste o tema do app para o seu estilo de uso.
               </Text>
             </View>
           </View>
 
+          <View
+            style={[
+              styles.highlightCard,
+              {
+                backgroundColor: colors.surfaceSecondary,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <View style={styles.highlightTopRow}>
+              <View style={styles.highlightTextBlock}>
+                <Text style={[styles.highlightLabel, { color: colors.textMuted }]}>
+                  Tema atual
+                </Text>
+                <Text style={[styles.highlightValue, { color: colors.text }]}>
+                  {isDark ? 'Modo escuro' : 'Modo claro'}
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.themeBadge,
+                  {
+                    backgroundColor: isDark
+                      ? colors.primarySoft ?? colors.surface
+                      : colors.surface,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={isDark ? 'moon' : 'sunny'}
+                  size={14}
+                  color={colors.primary}
+                />
+                <Text style={[styles.themeBadgeText, { color: colors.primary }]}>
+                  {isDark ? 'Escuro' : 'Claro'}
+                </Text>
+              </View>
+            </View>
+
+            <Text
+              style={[styles.highlightDescription, { color: colors.textMuted }]}
+            >
+              Altere entre uma visualização mais escura para foco e conforto
+              visual, ou uma visualização mais clara para ambientes iluminados.
+            </Text>
+          </View>
+
           <TouchableOpacity
             style={[
-              styles.settingButton,
-              { backgroundColor: colors.surfaceSecondary },
+              styles.primaryActionButton,
+              { backgroundColor: colors.primary },
             ]}
             onPress={toggleThemeMode}
             activeOpacity={0.85}
           >
-            <View style={styles.settingLeft}>
-              <View
-                style={[
-                  styles.settingIcon,
-                  { backgroundColor: colors.primarySoft },
-                ]}
-              >
-                <Ionicons
-                  name={mode === 'dark' ? 'moon' : 'sunny'}
-                  size={18}
-                  color={colors.primary}
-                />
-              </View>
-
-              <View style={styles.settingTextBlock}>
-                <Text style={[styles.settingLabel, { color: colors.text }]}>
-                  Tema do app
-                </Text>
-                <Text
-                  style={[
-                    styles.settingDescriptionText,
-                    { color: colors.textMuted },
-                  ]}
-                >
-                  Alterne entre modo escuro e claro.
-                </Text>
-              </View>
-            </View>
-
-            <View
-              style={[
-                styles.valueBadge,
-                { backgroundColor: colors.surface },
-              ]}
-            >
-              <Text style={[styles.settingValue, { color: colors.primary }]}>
-                {mode === 'dark' ? 'Escuro' : 'Claro'}
-              </Text>
-            </View>
+            <Ionicons
+              name={isDark ? 'sunny-outline' : 'moon-outline'}
+              size={18}
+              color="#FFFFFF"
+              style={styles.actionIcon}
+            />
+            <Text style={styles.primaryActionButtonText}>
+              {isDark ? 'Trocar para modo claro' : 'Trocar para modo escuro'}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -117,7 +165,7 @@ export default function SettingsScreen() {
             <View
               style={[
                 styles.sectionIcon,
-                { backgroundColor: colors.primarySoft },
+                { backgroundColor: colors.primarySoft ?? colors.surfaceSecondary },
               ]}
             >
               <Ionicons
@@ -131,47 +179,49 @@ export default function SettingsScreen() {
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
                 Aplicativo
               </Text>
-              <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>
-                Informações do Sentinela.
+              <Text
+                style={[styles.sectionDescription, { color: colors.textMuted }]}
+              >
+                Informações gerais sobre a versão atual do Sentinela.
               </Text>
             </View>
           </View>
 
           <View
             style={[
-              styles.infoRow,
-              { borderBottomColor: colors.border },
+              styles.infoCard,
+              {
+                backgroundColor: colors.surfaceSecondary,
+                borderColor: colors.border,
+              },
             ]}
           >
-            <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
-              Nome
-            </Text>
-            <Text style={[styles.infoValue, { color: colors.text }]}>
-              Sentinela
-            </Text>
-          </View>
+            <View style={[styles.infoRow, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
+                Nome
+              </Text>
+              <Text style={[styles.infoValue, { color: colors.text }]}>
+                Sentinela
+              </Text>
+            </View>
 
-          <View
-            style={[
-              styles.infoRow,
-              { borderBottomColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
-              Versão
-            </Text>
-            <Text style={[styles.infoValue, { color: colors.text }]}>
-              1.0.0
-            </Text>
-          </View>
+            <View style={[styles.infoRow, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
+                Versão
+              </Text>
+              <Text style={[styles.infoValue, { color: colors.text }]}>
+                1.0.0
+              </Text>
+            </View>
 
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
-              Registro
-            </Text>
-            <Text style={[styles.infoValue, { color: colors.text }]}>
-              Somente por mensagem
-            </Text>
+            <View style={styles.infoRowLast}>
+              <Text style={[styles.infoLabel, { color: colors.textMuted }]}>
+                Registro principal
+              </Text>
+              <Text style={[styles.infoValue, { color: colors.text }]}>
+                Mensagem inteligente
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -188,7 +238,7 @@ export default function SettingsScreen() {
             <View
               style={[
                 styles.sectionIcon,
-                { backgroundColor: colors.primarySoft },
+                { backgroundColor: colors.primarySoft ?? colors.surfaceSecondary },
               ]}
             >
               <Ionicons
@@ -200,17 +250,61 @@ export default function SettingsScreen() {
 
             <View style={styles.sectionHeaderText}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Futuras preferências
+                Em breve
               </Text>
-              <Text style={[styles.sectionDescription, { color: colors.textMuted }]}>
-                Espaço reservado para novas opções do app.
+              <Text
+                style={[styles.sectionDescription, { color: colors.textMuted }]}
+              >
+                Espaço reservado para novas preferências do app.
               </Text>
             </View>
           </View>
 
-          <Text style={[styles.placeholderText, { color: colors.textMuted }]}>
-            Em breve você poderá configurar preferências do parser, comportamento do registro e outras personalizações do Sentinela.
-          </Text>
+          <View
+            style={[
+              styles.roadmapCard,
+              {
+                backgroundColor: colors.surfaceSecondary,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <View style={styles.roadmapItem}>
+              <View
+                style={[
+                  styles.roadmapDot,
+                  { backgroundColor: colors.primary },
+                ]}
+              />
+              <Text style={[styles.roadmapText, { color: colors.textMuted }]}>
+                Preferências do parser de mensagens
+              </Text>
+            </View>
+
+            <View style={styles.roadmapItem}>
+              <View
+                style={[
+                  styles.roadmapDot,
+                  { backgroundColor: colors.primary },
+                ]}
+              />
+              <Text style={[styles.roadmapText, { color: colors.textMuted }]}>
+                Configuração de comportamento do registro automático
+              </Text>
+            </View>
+
+            <View style={styles.roadmapItem}>
+              <View
+                style={[
+                  styles.roadmapDot,
+                  { backgroundColor: colors.primary },
+                ]}
+              />
+              <Text style={[styles.roadmapText, { color: colors.textMuted }]}>
+                Preferências avançadas de visualização
+              </Text>
+            </View>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -225,19 +319,35 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 28,
   },
-  title: {
-    fontSize: 30,
-    fontWeight: '700',
+  heroCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 20,
     marginTop: 12,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  heroIcon: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 6,
   },
   subtitle: {
     fontSize: 14,
-    marginTop: 4,
-    marginBottom: 16,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   sectionCard: {
     borderWidth: 1,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 16,
     marginBottom: 16,
   },
@@ -264,56 +374,80 @@ const styles = StyleSheet.create({
   sectionDescription: {
     fontSize: 13,
     marginTop: 2,
+    lineHeight: 18,
   },
-  settingButton: {
-    borderRadius: 14,
-    minHeight: 72,
+  highlightCard: {
+    borderWidth: 1,
+    borderRadius: 16,
     padding: 14,
+    marginBottom: 14,
+  },
+  highlightTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 8,
   },
-  settingLeft: {
+  highlightTextBlock: {
+    flex: 1,
+  },
+  highlightLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  highlightValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  highlightDescription: {
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  themeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-  },
-  settingIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  settingTextBlock: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  settingLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  settingDescriptionText: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  valueBadge: {
-    minWidth: 96,
-    paddingHorizontal: 12,
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: 12,
+  },
+  themeBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  primaryActionButton: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 12,
+    flexDirection: 'row',
   },
-  settingValue: {
-    fontSize: 14,
+  actionIcon: {
+    marginRight: 8,
+  },
+  primaryActionButtonText: {
+    color: '#FFFFFF',
     fontWeight: '700',
-    textAlign: 'center',
+    fontSize: 16,
+  },
+  infoCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
   },
   infoRow: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  infoRowLast: {
+    paddingVertical: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
@@ -327,8 +461,26 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textAlign: 'right',
   },
-  placeholderText: {
+  roadmapCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    gap: 12,
+  },
+  roadmapItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  roadmapDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 6,
+  },
+  roadmapText: {
+    flex: 1,
     fontSize: 14,
-    lineHeight: 21,
+    lineHeight: 20,
   },
 });

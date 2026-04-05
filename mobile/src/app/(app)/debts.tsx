@@ -31,6 +31,32 @@ type DebtStatus = 'pending' | 'received' | 'paid';
 type DebtTypeFilter = 'all' | DebtType;
 type DebtStatusFilter = 'all' | 'pending' | 'resolved';
 
+type DebtMessageFeedback =
+  | {
+      status: 'needs_confirmation';
+      message: string;
+      ambiguities: string[];
+      originalMessage: string;
+    }
+  | {
+      status: 'not_found';
+      message: string;
+      originalMessage: string;
+    }
+  | {
+      status: 'unable_to_parse';
+      message: string;
+      originalMessage: string;
+    }
+  | null;
+
+const quickExamples = [
+  'João me deve 80 do almoço',
+  'Devo 200 a mainha',
+  'João já pagou',
+  'Paguei Maria',
+];
+
 export default function DebtsScreen() {
   const { colors } = useAppTheme();
 
@@ -56,6 +82,9 @@ export default function DebtsScreen() {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState<Date | null>(null);
+
+  const [messageFeedback, setMessageFeedback] =
+    useState<DebtMessageFeedback>(null);
 
   async function loadDebts(showInitialLoading = false) {
     try {
@@ -113,6 +142,10 @@ export default function DebtsScreen() {
     resetForm();
   }
 
+  function resetMessageFeedback() {
+    setMessageFeedback(null);
+  }
+
   async function handleCreateDebt() {
     if (!personName.trim() || !description.trim() || !amount.trim()) {
       Alert.alert(
@@ -167,6 +200,7 @@ export default function DebtsScreen() {
 
     try {
       setSubmittingMessage(true);
+      resetMessageFeedback();
 
       const trimmedMessage = message.trim();
 
@@ -174,13 +208,13 @@ export default function DebtsScreen() {
         message: trimmedMessage,
       });
 
-      setMessage('');
-      Keyboard.dismiss();
-
       const result = response.data;
 
       if (result?.status === 'created') {
+        setMessage('');
+        Keyboard.dismiss();
         await loadDebts(false);
+
         Alert.alert(
           'Sucesso',
           result?.message ?? 'Dívida registrada com sucesso.'
@@ -189,7 +223,10 @@ export default function DebtsScreen() {
       }
 
       if (result?.status === 'settled') {
+        setMessage('');
+        Keyboard.dismiss();
         await loadDebts(false);
+
         Alert.alert(
           'Sucesso',
           result?.message ?? 'Baixa realizada com sucesso.'
@@ -198,32 +235,35 @@ export default function DebtsScreen() {
       }
 
       if (result?.status === 'needs_confirmation') {
-        const ambiguities =
-          Array.isArray(result?.ambiguities) && result.ambiguities.length > 0
-            ? `\n\nPossíveis problemas:\n- ${result.ambiguities.join('\n- ')}`
-            : '';
-
-        Alert.alert(
-          'Preciso de mais clareza',
-          `${result?.message ?? 'A mensagem ficou ambígua.'}${ambiguities}`
-        );
+        setMessageFeedback({
+          status: 'needs_confirmation',
+          message: result?.message ?? 'A mensagem ficou ambígua.',
+          ambiguities: Array.isArray(result?.ambiguities)
+            ? result.ambiguities
+            : [],
+          originalMessage: trimmedMessage,
+        });
         return;
       }
 
       if (result?.status === 'not_found') {
-        Alert.alert(
-          'Nada encontrado',
-          result?.message ??
-            'Nenhuma dívida compatível foi encontrada para essa mensagem.'
-        );
+        setMessageFeedback({
+          status: 'not_found',
+          message:
+            result?.message ??
+            'Nenhuma dívida compatível foi encontrada para essa mensagem.',
+          originalMessage: trimmedMessage,
+        });
         return;
       }
 
       if (result?.status === 'unable_to_parse') {
-        Alert.alert(
-          'Não foi possível interpretar',
-          result?.message ?? 'Não foi possível interpretar a mensagem.'
-        );
+        setMessageFeedback({
+          status: 'unable_to_parse',
+          message:
+            result?.message ?? 'Não foi possível interpretar a mensagem.',
+          originalMessage: trimmedMessage,
+        });
         return;
       }
 
@@ -332,6 +372,13 @@ export default function DebtsScreen() {
     });
   }
 
+  function goToDebtDetails(id: number) {
+    router.push({
+      pathname: '/debt/[id]',
+      params: { id: String(id) },
+    });
+  }
+
   function formatCurrency(value: number) {
     return formatCurrencyBRL(value);
   }
@@ -353,10 +400,54 @@ export default function DebtsScreen() {
     }
   }
 
+  function applyQuickExample(example: string) {
+    setMessage(example);
+    resetMessageFeedback();
+  }
+
+  function getFeedbackConfig() {
+    if (!messageFeedback) return null;
+
+    if (messageFeedback.status === 'needs_confirmation') {
+      return {
+        title: 'Preciso de mais clareza',
+        subtitle:
+          'Entendi parte da mensagem, mas ainda preciso que você ajuste ou deixe a frase mais específica.',
+        tone: colors.danger,
+        bg: colors.dangerSoft,
+      };
+    }
+
+    if (messageFeedback.status === 'not_found') {
+      return {
+        title: 'Nada encontrado',
+        subtitle:
+          'Não encontrei uma dívida pendente compatível com a frase enviada.',
+        tone: colors.primary,
+        bg: colors.surfaceSecondary,
+      };
+    }
+
+    return {
+      title: 'Não consegui interpretar',
+      subtitle:
+        'A mensagem ficou genérica demais. Reescreva de forma mais direta.',
+      tone: colors.danger,
+      bg: colors.dangerSoft,
+    };
+  }
+
+  const feedbackConfig = useMemo(
+    () => getFeedbackConfig(),
+    [messageFeedback, colors]
+  );
+
   const totalToReceive = useMemo(
     () =>
       debts
-        .filter((debt) => debt.type === 'to_receive' && debt.status === 'pending')
+        .filter(
+          (debt) => debt.type === 'to_receive' && debt.status === 'pending'
+        )
         .reduce((sum, debt) => sum + debt.amount, 0),
     [debts]
   );
@@ -409,8 +500,9 @@ export default function DebtsScreen() {
     const isPending = item.status === 'pending';
 
     return (
-      <View
+      <TouchableOpacity
         key={item.id}
+        activeOpacity={0.9}
         style={[
           styles.debtCard,
           {
@@ -418,6 +510,7 @@ export default function DebtsScreen() {
             borderColor: colors.border,
           },
         ]}
+        onPress={() => goToDebtDetails(item.id)}
       >
         <View style={styles.debtHeader}>
           <View style={{ flex: 1 }}>
@@ -446,7 +539,11 @@ export default function DebtsScreen() {
           Status: {getDebtStatusLabel(item.status)}
         </Text>
         <Text style={[styles.debtMeta, { color: colors.textMuted }]}>
-          Vencimento: {item.dueDate ? formatDateBR(item.dueDate) : 'Não informado'}
+          Vencimento:{' '}
+          {item.dueDate ? formatDateBR(item.dueDate) : 'Não informado'}
+        </Text>
+        <Text style={[styles.debtHint, { color: colors.textMuted }]}>
+          Toque para ver mais detalhes
         </Text>
 
         <View style={styles.actionsRow}>
@@ -494,7 +591,7 @@ export default function DebtsScreen() {
             </Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   }
 
@@ -569,23 +666,57 @@ export default function DebtsScreen() {
                 <Text style={[styles.messageTitle, { color: colors.text }]}>
                   Mensagem inteligente
                 </Text>
-                <Text style={[styles.messageSubtitle, { color: colors.textMuted }]}>
-                  Exemplos: "João me deve 80 do almoço", "Devo 200 a mainha" ou "João já pagou"
+                <Text
+                  style={[styles.messageSubtitle, { color: colors.textMuted }]}
+                >
+                  Exemplos: "João me deve 80 do almoço", "Devo 200 a mainha" ou
+                  "João já pagou"
                 </Text>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.examplesRow}
+                >
+                  {quickExamples.map((example) => (
+                    <TouchableOpacity
+                      key={example}
+                      style={[
+                        styles.exampleChip,
+                        {
+                          backgroundColor: colors.surfaceSecondary,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      onPress={() => applyQuickExample(example)}
+                    >
+                      <Text
+                        style={[styles.exampleChipText, { color: colors.text }]}
+                      >
+                        {example}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
 
                 <TextInput
                   style={[
                     styles.input,
                     {
                       backgroundColor: colors.inputBackground,
-                      borderColor: colors.border,
+                      borderColor: messageFeedback ? colors.danger : colors.border,
                       color: colors.text,
                     },
                   ]}
                   placeholder="Digite a mensagem da dívida"
                   placeholderTextColor={colors.textMuted}
                   value={message}
-                  onChangeText={setMessage}
+                  onChangeText={(value) => {
+                    setMessage(value);
+                    if (messageFeedback) {
+                      resetMessageFeedback();
+                    }
+                  }}
                 />
 
                 <TouchableOpacity
@@ -603,6 +734,182 @@ export default function DebtsScreen() {
                 </TouchableOpacity>
               </View>
 
+              {messageFeedback && feedbackConfig && (
+                <View
+                  style={[
+                    styles.feedbackCard,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <View style={styles.feedbackHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.feedbackTitle, { color: colors.text }]}>
+                        {feedbackConfig.title}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.feedbackSubtitle,
+                          { color: colors.textMuted },
+                        ]}
+                      >
+                        {feedbackConfig.subtitle}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.feedbackBadge,
+                        { backgroundColor: feedbackConfig.bg },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.feedbackBadgeText,
+                          { color: feedbackConfig.tone },
+                        ]}
+                      >
+                        Revisar
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.feedbackPreviewCard,
+                      {
+                        backgroundColor: colors.surfaceSecondary,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.feedbackPreviewLabel,
+                        { color: colors.textMuted },
+                      ]}
+                    >
+                      Mensagem enviada
+                    </Text>
+                    <Text
+                      style={[
+                        styles.feedbackPreviewValue,
+                        { color: colors.text },
+                      ]}
+                    >
+                      {messageFeedback.originalMessage}
+                    </Text>
+                  </View>
+
+                  <Text style={[styles.feedbackMainMessage, { color: colors.text }]}>
+                    {messageFeedback.message}
+                  </Text>
+
+                  {messageFeedback.status === 'needs_confirmation' &&
+                    messageFeedback.ambiguities.length > 0 && (
+                      <View style={styles.feedbackAttentionBox}>
+                        <Text
+                          style={[
+                            styles.feedbackAttentionTitle,
+                            { color: colors.text },
+                          ]}
+                        >
+                          Pontos de atenção
+                        </Text>
+
+                        <View style={styles.feedbackChipsWrap}>
+                          {messageFeedback.ambiguities.map((item, index) => (
+                            <View
+                              key={`${item}-${index}`}
+                              style={[
+                                styles.feedbackChip,
+                                {
+                                  backgroundColor: colors.dangerSoft,
+                                  borderColor: colors.border,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.feedbackChipText,
+                                  { color: colors.danger },
+                                ]}
+                              >
+                                {item}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                  <View
+                    style={[
+                      styles.rewriteHintCard,
+                      {
+                        backgroundColor: colors.surfaceSecondary,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.rewriteHintTitle, { color: colors.text }]}
+                    >
+                      Tente reescrever assim
+                    </Text>
+                    <Text
+                      style={[
+                        styles.rewriteHintText,
+                        { color: colors.textMuted },
+                      ]}
+                    >
+                      • "João me deve 80 do almoço"{'\n'}
+                      • "Paguei Maria"{'\n'}
+                      • "Devo 120 a Pedro do ingresso"
+                    </Text>
+                  </View>
+
+                  <View style={styles.feedbackActions}>
+                    <TouchableOpacity
+                      style={[
+                        styles.secondaryButton,
+                        { backgroundColor: colors.surfaceSecondary },
+                      ]}
+                      onPress={() => {
+                        resetMessageFeedback();
+                        setMessage('');
+                        Keyboard.dismiss();
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.secondaryButtonText,
+                          { color: colors.text },
+                        ]}
+                      >
+                        Limpar
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.primaryButton,
+                        { backgroundColor: colors.primary },
+                      ]}
+                      onPress={() => {
+                        resetMessageFeedback();
+                      }}
+                    >
+                      <Text style={styles.primaryButtonText}>
+                        Ajustar mensagem
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
               <View style={styles.summaryGrid}>
                 <View
                   style={[
@@ -613,7 +920,9 @@ export default function DebtsScreen() {
                     },
                   ]}
                 >
-                  <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>
+                  <Text
+                    style={[styles.summaryLabel, { color: colors.textMuted }]}
+                  >
                     A receber
                   </Text>
                   <Text style={[styles.summaryValue, { color: colors.success }]}>
@@ -630,7 +939,9 @@ export default function DebtsScreen() {
                     },
                   ]}
                 >
-                  <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>
+                  <Text
+                    style={[styles.summaryLabel, { color: colors.textMuted }]}
+                  >
                     A pagar
                   </Text>
                   <Text style={[styles.summaryValue, { color: colors.danger }]}>
@@ -655,7 +966,9 @@ export default function DebtsScreen() {
                   ]}
                   onPress={() => setShowFiltersModal(true)}
                 >
-                  <Text style={[styles.filtersButtonText, { color: colors.text }]}>
+                  <Text
+                    style={[styles.filtersButtonText, { color: colors.text }]}
+                  >
                     Filtros
                   </Text>
                 </TouchableOpacity>
@@ -916,8 +1229,7 @@ export default function DebtsScreen() {
                     style={[
                       styles.segmentButtonText,
                       {
-                        color:
-                          type === 'to_receive' ? '#FFFFFF' : colors.text,
+                        color: type === 'to_receive' ? '#FFFFFF' : colors.text,
                       },
                     ]}
                   >
@@ -1001,7 +1313,9 @@ export default function DebtsScreen() {
                 onPress={() => setShowDueDatePicker(true)}
               >
                 <Text style={{ color: colors.text }}>
-                  {dueDate ? formatDateBR(dueDate) : 'Selecionar data (opcional)'}
+                  {dueDate
+                    ? formatDateBR(dueDate)
+                    : 'Selecionar data (opcional)'}
                 </Text>
               </TouchableOpacity>
 
@@ -1117,10 +1431,120 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     lineHeight: 18,
   },
+  examplesRow: {
+    gap: 8,
+    paddingBottom: 10,
+  },
+  exampleChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginRight: 8,
+  },
+  exampleChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   primaryButtonInline: {
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
+  },
+  feedbackCard: {
+    padding: 16,
+    borderRadius: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  feedbackHeader: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  feedbackTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  feedbackSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  feedbackBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  feedbackBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  feedbackPreviewCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  feedbackPreviewLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  feedbackPreviewValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  feedbackMainMessage: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  feedbackAttentionBox: {
+    marginBottom: 14,
+  },
+  feedbackAttentionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  feedbackChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  feedbackChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  feedbackChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  rewriteHintCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  rewriteHintTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  rewriteHintText: {
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  feedbackActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 2,
   },
   filtersBar: {
     flexDirection: 'row',
@@ -1214,6 +1638,11 @@ const styles = StyleSheet.create({
   debtMeta: {
     fontSize: 13,
     marginBottom: 4,
+  },
+  debtHint: {
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 2,
   },
   actionsRow: {
     flexDirection: 'row',
