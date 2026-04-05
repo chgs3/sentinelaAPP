@@ -11,171 +11,73 @@ function normalizeText(value: string) {
   return value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
-function looksLikeInternalTransfer(message: string) {
+function inferPossibleTransferFromMessage(message: string): boolean {
   const normalized = normalizeText(message);
 
-  const transferKeywords = [
+  const strongTransferSignals = [
     'transferi',
     'transferencia',
     'transferência',
-    'passei',
-    'mandei',
     'enviei',
-    'minha outra conta',
+    'mandei',
+    'passei',
+    'joguei',
     'entre contas',
-    'pro inter',
-    'pro nubank',
-    'para o inter',
-    'para o nubank',
-    'da minha conta',
+    'minha outra conta',
+    'para minha conta',
     'pra minha conta',
+    'da minha conta',
+    'de uma conta para outra',
   ];
 
-  return transferKeywords.some((keyword) =>
-    normalized.includes(normalizeText(keyword))
+  if (strongTransferSignals.some((signal) => normalized.includes(signal))) {
+    return true;
+  }
+
+  const knownFinancialTargets = [
+    'nubank',
+    'inter',
+    'picpay',
+    'caixa',
+    'itau',
+    'itaú',
+    'bradesco',
+    'santander',
+    'banco do brasil',
+    'mercado pago',
+    'next',
+    'c6',
+    'neon',
+    'wise',
+    'paypal',
+  ];
+
+  const hasDirection =
+    normalized.includes(' pro ') ||
+    normalized.includes(' pra ') ||
+    normalized.includes(' para ');
+
+  const mentionsKnownTarget = knownFinancialTargets.some((target) =>
+    normalized.includes(target)
   );
-}
 
-function extractAmountFromMessage(message: string) {
-  const normalized = message.replace(',', '.');
-  const match = normalized.match(/(\d+(\.\d+)?)/);
+  const hasExplicitTransferVerb =
+    normalized.includes('transferi') ||
+    normalized.includes('enviei') ||
+    normalized.includes('mandei') ||
+    normalized.includes('passei');
 
-  if (!match) return null;
-
-  const amount = Number(match[1]);
-  if (Number.isNaN(amount) || amount <= 0) return null;
-
-  return amount;
-}
-
-function inferPaymentMethod(message: string): 'credit' | 'debit' | 'pix' | 'cash' | null {
-  const normalized = normalizeText(message);
-
-  if (normalized.includes('pix')) return 'pix';
-  if (normalized.includes('credito') || normalized.includes('crédito')) return 'credit';
-  if (normalized.includes('debito') || normalized.includes('débito')) return 'debit';
-  if (normalized.includes('dinheiro') || normalized.includes('especie') || normalized.includes('espécie')) {
-    return 'cash';
-  }
-
-  return null;
-}
-
-function inferTypeFromMessage(message: string): 'income' | 'expense' | null {
-  const normalized = normalizeText(message);
-
-  const incomeSignals = ['recebi', 'ganhei', 'entrou', 'entrada', 'caiu'];
-  const expenseSignals = ['gastei', 'paguei', 'comprei', 'gasto', 'pago'];
-
-  if (incomeSignals.some((signal) => normalized.includes(signal))) return 'income';
-  if (expenseSignals.some((signal) => normalized.includes(signal))) return 'expense';
-
-  return null;
-}
-
-function inferDescriptionAndCategory(message: string, type: 'income' | 'expense') {
-  const normalized = normalizeText(message);
-
-  if (type === 'income') {
-    if (normalized.includes('pix')) {
-      return {
-        description: 'Recebimento via Pix',
-        category: 'Trabalho',
-      };
-    }
-
-    return {
-      description: 'Recebimento',
-      category: 'Trabalho',
-    };
-  }
-
-  if (normalized.includes('uber') || normalized.includes('99')) {
-    return {
-      description: 'Transporte por app',
-      category: 'Transporte',
-    };
-  }
-
-  if (normalized.includes('mercado') || normalized.includes('supermercado')) {
-    return {
-      description: 'Compra de mercado',
-      category: 'Alimentação',
-    };
-  }
-
-  if (normalized.includes('ifood') || normalized.includes('pizza') || normalized.includes('lanche') || normalized.includes('almoco') || normalized.includes('almoço')) {
-    return {
-      description: 'Alimentação',
-      category: 'Alimentação',
-    };
-  }
-
-  if (normalized.includes('pix')) {
-    return {
-      description: 'Pagamento via Pix',
-      category: 'Outros',
-    };
-  }
-
-  return {
-    description: 'Despesa',
-    category: 'Outros',
-  };
-}
-
-function buildStructuredFallback(message: string) {
-  const amount = extractAmountFromMessage(message);
-  const type = inferTypeFromMessage(message);
-  const paymentMethod = inferPaymentMethod(message);
-  const isTransfer = looksLikeInternalTransfer(message);
-
-  if (isTransfer && amount) {
-    return {
-      type: 'expense' as const,
-      amount,
-      description: 'Transferência entre contas',
-      category: 'Outros',
-      transactionAt: new Date().toISOString(),
-      rawDateExpression: null,
-      paymentMethod,
-      accountOrCard: null,
-      confidence: 0.8,
-      possibleTransfer: true,
-    };
-  }
-
-  if (amount && type) {
-    const inferred = inferDescriptionAndCategory(message, type);
-
-    return {
-      type,
-      amount,
-      description: inferred.description,
-      category: inferred.category,
-      transactionAt: new Date().toISOString(),
-      rawDateExpression: null,
-      paymentMethod,
-      accountOrCard: null,
-      confidence:
-        inferred.category === 'Outros' ? 0.72 : 0.9,
-      possibleTransfer: false,
-    };
-  }
-
-  return null;
+  return hasExplicitTransferVerb && hasDirection && mentionsKnownTarget;
 }
 
 class MessageController {
   async parseAndCreate(req: Request, res: Response) {
     try {
-      console.log('Entrou em /messages/parse');
-      console.log('Body recebido:', req.body);
-
       const userId = req.userId;
 
       if (!userId) {
@@ -197,66 +99,30 @@ class MessageController {
       let parsed = await aiParseTransactionMessageService.execute(message);
 
       if (!parsed) {
-        const structuredFallback = buildStructuredFallback(message);
-
-        if (structuredFallback) {
-          parsed = structuredFallback;
-        } else {
-          const fallback = parseTransactionMessageService.execute(message);
-
-          if (fallback) {
-            parsed = {
-              ...fallback,
-              transactionAt: fallback.transactionAt.toISOString(),
-              rawDateExpression: null,
-              confidence: 0.5,
-              possibleTransfer: looksLikeInternalTransfer(message),
-              paymentMethod:
-                fallback.paymentMethod === 'Pix'
-                  ? 'pix'
-                  : fallback.paymentMethod === 'Credito'
-                  ? 'credit'
-                  : fallback.paymentMethod === 'Debito'
-                  ? 'debit'
-                  : fallback.paymentMethod === 'Dinheiro'
-                  ? 'cash'
-                  : inferPaymentMethod(message),
-            };
-          } else if (looksLikeInternalTransfer(message)) {
-            const fallbackAmount = extractAmountFromMessage(message) ?? 1;
-
-            parsed = {
-              type: 'expense',
-              amount: fallbackAmount,
-              description: 'Transferência entre contas',
-              category: 'Outros',
-              transactionAt: new Date().toISOString(),
-              rawDateExpression: null,
-              paymentMethod: inferPaymentMethod(message),
-              accountOrCard: null,
-              confidence: 0.8,
-              possibleTransfer: true,
-            };
-          } else {
-            console.log('Retornando unable_to_parse por falta de parse/fallback');
-            return res.status(200).json({
-              status: 'unable_to_parse',
-              message: 'Não foi possível interpretar a mensagem enviada.',
-              ambiguities: [],
-            });
-          }
-        }
+        parsed = parseTransactionMessageService.execute(message);
       }
 
-      console.log('Parsed antes da decisão:', parsed);
+      if (!parsed) {
+        return res.status(200).json({
+          status: 'unable_to_parse',
+          message: 'Não foi possível interpretar a mensagem enviada.',
+          ambiguities: [],
+        });
+      }
+
+      const safePossibleTransfer = inferPossibleTransferFromMessage(message);
+
+      const parsedNormalized = {
+        ...parsed,
+        possibleTransfer: safePossibleTransfer,
+      };
 
       const resolvedDate = resolveRelativeDate(
-        parsed.rawDateExpression,
-        parsed.transactionAt
+        parsedNormalized.rawDateExpression,
+        parsedNormalized.transactionAt
       );
 
       if (Number.isNaN(resolvedDate.getTime())) {
-        console.log('Retornando unable_to_parse por data inválida');
         return res.status(200).json({
           status: 'unable_to_parse',
           message: 'Não foi possível resolver a data da transação.',
@@ -265,18 +131,13 @@ class MessageController {
       }
 
       const parsedWithResolvedDate = {
-        ...parsed,
+        ...parsedNormalized,
         transactionAt: resolvedDate.toISOString(),
       };
 
-      console.log('Parsed com data resolvida:', parsedWithResolvedDate);
-
       const decision = decideParseOutcome(message, parsedWithResolvedDate);
 
-      console.log('Decision final:', decision);
-
       if (decision.status === 'ignored_transfer') {
-        console.log('Retornando ignored_transfer');
         return res.status(200).json({
           status: 'ignored_transfer',
           message: decision.reason,
@@ -286,7 +147,6 @@ class MessageController {
       }
 
       if (decision.status === 'unable_to_parse') {
-        console.log('Retornando unable_to_parse');
         return res.status(200).json({
           status: 'unable_to_parse',
           message: decision.reason,
@@ -296,7 +156,6 @@ class MessageController {
       }
 
       if (decision.status === 'needs_confirmation') {
-        console.log('Retornando needs_confirmation');
         return res.status(200).json({
           status: 'needs_confirmation',
           message: decision.reason,
@@ -318,7 +177,6 @@ class MessageController {
         },
       });
 
-      console.log('Retornando created');
       return res.status(201).json({
         status: 'created',
         message: 'Transação criada com sucesso.',

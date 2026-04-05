@@ -1,28 +1,46 @@
 import axios from 'axios';
-import { router } from 'expo-router';
 import { getToken, removeToken } from './authStorage';
 
+const BASE_URL = 'http://192.168.1.12:3333';
+
 export const api = axios.create({
-  baseURL: 'http://192.168.1.12:3333',
-  timeout: 5000,
+  baseURL: BASE_URL,
+  timeout: 15000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
-api.interceptors.request.use(async (config) => {
-  const token = await getToken();
+api.interceptors.request.use(
+  async (config) => {
+    const token = await getToken();
 
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
   }
-
-  return config;
-});
+);
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    return response;
+  },
   async (error) => {
+    console.error('[API ERROR]', {
+      message: error?.message,
+      status: error?.response?.status,
+      url: error?.config
+        ? `${error.config.baseURL}${error.config.url}`
+        : undefined,
+    });
+
     if (error?.response?.status === 401) {
       await removeToken();
-      router.replace('/login');
     }
 
     return Promise.reject(error);

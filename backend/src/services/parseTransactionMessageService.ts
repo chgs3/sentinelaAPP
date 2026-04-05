@@ -1,232 +1,513 @@
-type TransactionType = 'expense' | 'income';
+import type { ParsedTransaction, PaymentMethod, TransactionType } from '../types/parsedTransaction';
 
-type ParsedTransaction = {
-  type: TransactionType;
-  amount: number;
-  description: string;
-  category: string;
-  transactionAt: Date;
-  paymentMethod?: string | null;
-  accountOrCard?: string | null;
-};
+function normalizeText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function extractAmount(raw: string): number | null {
+  const matches = raw.match(/\d+(?:[.,]\d{1,2})?/g);
+
+  if (!matches?.length) return null;
+
+  const value = Number(matches[0].replace(',', '.'));
+
+  if (Number.isNaN(value) || value <= 0) return null;
+
+  return value;
+}
+
+function detectRawDateExpression(normalized: string): string | null {
+  const expressions = [
+    'hoje',
+    'ontem',
+    'anteontem',
+    'domingo',
+    'segunda',
+    'segunda-feira',
+    'terca',
+    'terça',
+    'terça-feira',
+    'quarta',
+    'quarta-feira',
+    'quinta',
+    'quinta-feira',
+    'sexta',
+    'sexta-feira',
+    'sabado',
+    'sábado',
+    'ultima segunda',
+    'última segunda',
+    'ultima terça',
+    'última terça',
+    'ultima quarta',
+    'última quarta',
+    'ultima quinta',
+    'última quinta',
+    'ultima sexta',
+    'última sexta',
+    'ultimo domingo',
+    'último domingo',
+    'ultimo sabado',
+    'último sábado',
+  ];
+
+  const found = expressions.find((item) => normalized.includes(item));
+  return found ?? null;
+}
+
+function detectPaymentMethod(normalized: string): PaymentMethod {
+  if (
+    normalized.includes('pix') ||
+    normalized.includes('via pix') ||
+    normalized.includes('pelo pix') ||
+    normalized.includes('pela chave pix')
+  ) {
+    return 'pix';
+  }
+
+  if (
+    normalized.includes('credito') ||
+    normalized.includes('crédito') ||
+    normalized.includes('no credito') ||
+    normalized.includes('no crédito') ||
+    normalized.includes('cartao de credito') ||
+    normalized.includes('cartão de crédito')
+  ) {
+    return 'credit';
+  }
+
+  if (
+    normalized.includes('debito') ||
+    normalized.includes('débito') ||
+    normalized.includes('no debito') ||
+    normalized.includes('no débito') ||
+    normalized.includes('cartao de debito') ||
+    normalized.includes('cartão de débito')
+  ) {
+    return 'debit';
+  }
+
+  if (
+    normalized.includes('dinheiro') ||
+    normalized.includes('em especie') ||
+    normalized.includes('em espécie')
+  ) {
+    return 'cash';
+  }
+
+  return null;
+}
+
+function detectAccountOrCard(normalized: string): string | null {
+  const known = [
+    'nubank',
+    'inter',
+    'picpay',
+    'caixa',
+    'itau',
+    'itaú',
+    'bradesco',
+    'santander',
+    'bb',
+    'banco do brasil',
+    'mercado pago',
+    'mercadopago',
+    'next',
+    'c6',
+    'neon',
+    'wise',
+    'paypal',
+  ];
+
+  for (const item of known) {
+    if (normalized.includes(normalizeText(item))) {
+      if (item === 'mercadopago') return 'mercado pago';
+      if (item === 'itaú') return 'itau';
+      if (item === 'bb') return 'banco do brasil';
+      return item;
+    }
+  }
+
+  if (normalized.includes('cartao') || normalized.includes('cartão')) {
+    return 'cartão';
+  }
+
+  if (normalized.includes('conta')) {
+    return 'conta';
+  }
+
+  return null;
+}
+
+function detectPossibleTransfer(normalized: string, accountOrCard: string | null): boolean {
+  const strongTransferSignals = [
+    'transferi',
+    'transferencia',
+    'transferência',
+    'enviei',
+    'mandei',
+    'passei',
+    'joguei',
+    'entre contas',
+    'minha outra conta',
+    'para minha conta',
+    'pra minha conta',
+    'da minha conta',
+    'de uma conta para outra',
+  ];
+
+  if (strongTransferSignals.some((signal) => normalized.includes(signal))) {
+    return true;
+  }
+
+  const hasDirection =
+    normalized.includes(' pro ') ||
+    normalized.includes(' pra ') ||
+    normalized.includes(' para ');
+
+  const knownFinancialTargets = [
+    'nubank',
+    'inter',
+    'picpay',
+    'caixa',
+    'itau',
+    'itaú',
+    'bradesco',
+    'santander',
+    'banco do brasil',
+    'mercado pago',
+    'next',
+    'c6',
+    'neon',
+    'wise',
+    'paypal',
+  ];
+
+  const mentionsKnownTarget =
+    (accountOrCard && knownFinancialTargets.includes(accountOrCard)) ||
+    knownFinancialTargets.some((target) => normalized.includes(target));
+
+  const hasExplicitTransferVerb =
+    normalized.includes('transferi') ||
+    normalized.includes('enviei') ||
+    normalized.includes('mandei') ||
+    normalized.includes('passei');
+
+  if (hasExplicitTransferVerb && hasDirection && mentionsKnownTarget) {
+    return true;
+  }
+
+  return false;
+}
+
+function inferType(normalized: string): { type: TransactionType | null; confidenceBoost: number } {
+  const incomeSignals = [
+    'recebi',
+    'ganhei',
+    'entrou',
+    'entrada',
+    'caiu',
+    'me pagaram',
+    'depositaram',
+    'reembolso',
+    'salario',
+    'salário',
+    'freela',
+  ];
+
+  const expenseSignals = [
+    'gastei',
+    'paguei',
+    'comprei',
+    'pago',
+    'gasto',
+    'debito',
+    'débito',
+    'usei',
+  ];
+
+  if (incomeSignals.some((signal) => normalized.includes(signal))) {
+    return { type: 'income', confidenceBoost: 0.25 };
+  }
+
+  if (expenseSignals.some((signal) => normalized.includes(signal))) {
+    return { type: 'expense', confidenceBoost: 0.25 };
+  }
+
+  if (normalized.includes('pix')) {
+    return { type: 'expense', confidenceBoost: 0.05 };
+  }
+
+  return { type: null, confidenceBoost: 0 };
+}
+
+function cleanupDescription(value: string | null | undefined) {
+  const cleaned = (value ?? '')
+    .replace(/^[,.\-:\s]+/, '')
+    .replace(/^(com|de|do|da|no|na|em|via|pelo|pela|para|pra)\s+/i, '')
+    .trim();
+
+  return cleaned;
+}
+
+function inferDescription(raw: string, normalized: string, type: TransactionType): string {
+  const patterns = [
+    /\bgastei\s+\d+(?:[.,]\d{1,2})?\s+(?:com|no|na|em)\s+(.+)$/i,
+    /\bpaguei\s+\d+(?:[.,]\d{1,2})?\s+(?:com|no|na|em)?\s*(.+)$/i,
+    /\bcomprei\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|com)?\s*(.+)$/i,
+    /\brecebi\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|via|pelo|pela)?\s*(.+)$/i,
+    /\bganhei\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da)?\s*(.+)$/i,
+    /\bentrou\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da)?\s*(.+)$/i,
+    /\bcaiu\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da)?\s*(.+)$/i,
+    /\bpix\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|com|para|pra|pro)?\s*(.+)$/i,
+    /\bcredito\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|com)?\s*(.+)$/i,
+    /\bcr[eé]dito\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|com)?\s*(.+)$/i,
+    /\bdebito\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|com)?\s*(.+)$/i,
+    /\bd[eé]bito\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|com)?\s*(.+)$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = raw.match(pattern);
+    if (match?.[1]?.trim()) {
+      const description = cleanupDescription(match[1]);
+      if (description) return description;
+    }
+  }
+
+  if (type === 'income') {
+    if (normalized.includes('pix')) return 'Recebimento via Pix';
+    return 'Recebimento';
+  }
+
+  if (normalized.includes('pix')) return 'Pagamento via Pix';
+  return 'Pagamento';
+}
+
+function inferCategory(normalized: string, type: TransactionType): string {
+  const includesAny = (items: string[]) => items.some((item) => normalized.includes(item));
+
+  if (
+    includesAny([
+      'uber',
+      '99',
+      'taxi',
+      'táxi',
+      'gasolina',
+      'combustivel',
+      'combustível',
+      'onibus',
+      'ônibus',
+      'metro',
+      'metrô',
+      'passagem',
+      'corrida',
+      'estacionamento',
+      'moto',
+    ])
+  ) {
+    return 'Transporte';
+  }
+
+  if (
+    includesAny([
+      'almoco',
+      'almoço',
+      'janta',
+      'lanche',
+      'ifood',
+      'pizza',
+      'mercado',
+      'supermercado',
+      'padaria',
+      'restaurante',
+      'comida',
+      'cafe',
+      'café',
+      'delivery',
+      'mcdonalds',
+      'burger king',
+      'subway',
+    ])
+  ) {
+    return 'Alimentação';
+  }
+
+  if (
+    includesAny([
+      'aluguel',
+      'condominio',
+      'condomínio',
+      'energia',
+      'luz',
+      'agua',
+      'água',
+      'internet',
+      'gas',
+      'gás',
+      'iptu',
+    ])
+  ) {
+    return 'Moradia';
+  }
+
+  if (
+    includesAny([
+      'farmacia',
+      'farmácia',
+      'medico',
+      'médico',
+      'consulta',
+      'remedio',
+      'remédio',
+      'hospital',
+      'plano de saude',
+      'plano de saúde',
+    ])
+  ) {
+    return 'Saúde';
+  }
+
+  if (
+    includesAny([
+      'cinema',
+      'netflix',
+      'spotify',
+      'viagem',
+      'bar',
+      'show',
+      'role',
+      'rolê',
+      'balada',
+      'jogo',
+      'game',
+    ])
+  ) {
+    return 'Lazer';
+  }
+
+  if (
+    includesAny([
+      'curso',
+      'faculdade',
+      'livro',
+      'software',
+      'ferramenta',
+      'projeto',
+      'cliente',
+      'estagio',
+      'estágio',
+    ])
+  ) {
+    return 'Trabalho';
+  }
+
+  if (
+    includesAny([
+      'roupa',
+      'shein',
+      'amazon',
+      'compra',
+      'compras',
+      'loja',
+      'tenis',
+      'tênis',
+      'sapato',
+    ])
+  ) {
+    return 'Compras';
+  }
+
+  if (
+    includesAny([
+      'salario',
+      'salário',
+      'freela',
+      'freelance',
+      'reembolso',
+      'pagamento recebido',
+      'cliente',
+      'bonus',
+      'bônus',
+      'comissao',
+      'comissão',
+    ])
+  ) {
+    return 'Trabalho';
+  }
+
+  return type === 'income' ? 'Trabalho' : 'Outros';
+}
 
 class ParseTransactionMessageService {
   execute(message: string): ParsedTransaction | null {
-    const normalizedMessage = this.normalizeMessage(message);
+    const raw = message.trim();
+    const normalized = normalizeText(raw);
 
-    const amount = this.extractAmount(normalizedMessage);
-    if (amount === null) return null;
+    const amount = extractAmount(raw);
+    if (!amount) return null;
 
-    const type = this.detectType(normalizedMessage);
-    const transactionAt = this.detectTransactionDate(normalizedMessage);
-    const paymentMethod = this.detectPaymentMethod(normalizedMessage);
-    const accountOrCard = this.detectAccountOrCard(normalizedMessage);
+    const { type, confidenceBoost } = inferType(normalized);
+    const paymentMethod = detectPaymentMethod(normalized);
+    const accountOrCard = detectAccountOrCard(normalized);
+    const possibleTransfer = detectPossibleTransfer(normalized, accountOrCard);
 
-    const extractedDescription = this.extractDescription(normalizedMessage);
-    const description = this.buildFallbackDescription(
-      extractedDescription,
-      type,
-      paymentMethod,
-      accountOrCard
-    );
+    const finalType: TransactionType =
+      type ??
+      (paymentMethod === 'credit' ||
+        paymentMethod === 'debit' ||
+        paymentMethod === 'cash'
+        ? 'expense'
+        : 'expense');
 
-    const category = this.detectCategory(description);
+    const description = inferDescription(raw, normalized, finalType);
+    const category = inferCategory(normalized, finalType);
+    const rawDateExpression = detectRawDateExpression(normalized);
+
+    let confidence = 0.4 + confidenceBoost;
+
+    if (paymentMethod) confidence += 0.08;
+    if (accountOrCard) confidence += 0.04;
+    if (category !== 'Outros') confidence += 0.12;
+    if (
+      description !== 'Pagamento' &&
+      description !== 'Recebimento' &&
+      description !== 'Pagamento via Pix' &&
+      description !== 'Recebimento via Pix'
+    ) {
+      confidence += 0.08;
+    }
+
+    if (possibleTransfer) confidence -= 0.12;
+
+    if (
+      normalized.includes('pix') &&
+      !normalized.includes('recebi') &&
+      !normalized.includes('ganhei') &&
+      !normalized.includes('gastei') &&
+      !normalized.includes('paguei')
+    ) {
+      confidence -= 0.08;
+    }
+
+    confidence = Math.max(0.2, Math.min(0.92, confidence));
 
     return {
-      type,
+      type: finalType,
       amount,
       description,
       category,
-      transactionAt,
+      transactionAt: new Date().toISOString(),
+      rawDateExpression,
       paymentMethod,
       accountOrCard,
+      confidence,
+      possibleTransfer,
     };
-  }
-
-  private normalizeMessage(message: string): string {
-    return message.trim().toLowerCase();
-  }
-
-  private extractAmount(message: string): number | null {
-    const match = message.match(/(\d+[.,]?\d{0,2})/);
-
-    if (!match) return null;
-
-    const normalizedValue = match[1].replace(',', '.');
-    const amount = Number(normalizedValue);
-
-    if (Number.isNaN(amount)) return null;
-
-    return amount;
-  }
-
-  private detectType(message: string): TransactionType {
-    const incomeKeywords = ['recebi', 'ganhei', 'entrada', 'entrou'];
-
-    if (incomeKeywords.some((word) => message.includes(word))) {
-      return 'income';
-    }
-
-    return 'expense';
-  }
-
-  private detectTransactionDate(message: string): Date {
-    const now = new Date();
-
-    if (message.includes('ontem')) {
-      const yesterday = new Date(now);
-      yesterday.setDate(now.getDate() - 1);
-      return yesterday;
-    }
-
-    const weekDays: Record<string, number> = {
-      domingo: 0,
-      segunda: 1,
-      'segunda-feira': 1,
-      terca: 2,
-      'terça': 2,
-      'terça-feira': 2,
-      quarta: 3,
-      'quarta-feira': 3,
-      quinta: 4,
-      'quinta-feira': 4,
-      sexta: 5,
-      'sexta-feira': 5,
-      sabado: 6,
-      sábado: 6,
-    };
-
-    const matchedDay = Object.keys(weekDays).find((day) => message.includes(day));
-
-    if (!matchedDay) {
-      return now;
-    }
-
-    const targetDay = weekDays[matchedDay];
-    const currentDay = now.getDay();
-
-    let diff = currentDay - targetDay;
-
-    if (diff < 0) {
-      diff += 7;
-    }
-
-    if (diff === 0) {
-      diff = 7;
-    }
-
-    const targetDate = new Date(now);
-    targetDate.setDate(now.getDate() - diff);
-
-    return targetDate;
-  }
-
-  private extractDescription(message: string): string {
-    const cleanedMessage = message
-      .replace(/gastei|paguei|comprei|recebi|ganhei|entrada|entrou/gi, '')
-      .replace(/(\d+[.,]?\d{0,2})/g, '')
-      .replace(/\b(com|de|do|da|no|na|em|via)\b/gi, '')
-      .replace(
-        /\b(hoje|ontem|domingo|segunda|segunda-feira|terca|terça|terça-feira|quarta|quarta-feira|quinta|quinta-feira|sexta|sexta-feira|sabado|sábado)\b/gi,
-        ''
-      )
-      .replace(/\b(crédito|credito|débito|debito|pix|dinheiro)\b/gi, '')
-      .replace(
-        /\b(nubank|inter|picpay|caixa|itau|itaú|bradesco|santander|bb|banco do brasil)\b/gi,
-        ''
-      )
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    return cleanedMessage;
-  }
-
-  private buildFallbackDescription(
-    description: string,
-    type: TransactionType,
-    paymentMethod: string | null,
-    accountOrCard: string | null
-  ): string {
-    if (description.trim()) {
-      return description;
-    }
-
-    if (type === 'income') {
-      if (paymentMethod === 'pix') return 'entrada pix';
-      if (accountOrCard) return `entrada ${accountOrCard}`;
-      return 'entrada';
-    }
-
-    if (paymentMethod === 'pix') return 'gasto pix';
-    if (accountOrCard) return `gasto ${accountOrCard}`;
-    return 'gasto';
-  }
-
-  private detectCategory(description: string): string {
-    const rules: Record<string, string[]> = {
-      Transporte: ['uber', '99', 'taxi', 'gasolina', 'ônibus', 'onibus', 'metrô', 'metro', 'moto'],
-      Alimentação: ['ifood', 'comida', 'lanche', 'restaurante', 'mercado', 'café', 'cafe', 'delivery', 'mcdonalds', 'burger king', 'subway', 'mc donalds', 'mc'],
-      Moradia: ['aluguel', 'energia', 'água', 'agua', 'internet', 'condomínio', 'condominio', 'luz', 'gás', 'gas'],
-      Saúde: ['farmácia', 'farmacia', 'médico', 'medico', 'consulta', 'remédio', 'remedio'],
-      Lazer: ['cinema', 'netflix', 'spotify', 'viagem', 'bar', 'show', 'role', 'balada'],
-      Trabalho: ['freela', 'freelance', 'curso', 'faculdade', 'livro', 'software', 'ferramenta', 'projeto', 'cliente', 'estagio', 'estágio', 'salário', 'salario', 'recebimento'],
-    };
-
-    for (const [category, keywords] of Object.entries(rules)) {
-      if (keywords.some((keyword) => description.includes(keyword))) {
-        return category;
-      }
-    }
-
-    return 'Outros';
-  }
-
-  private detectPaymentMethod(message: string): string | null {
-    if (message.includes('crédito') || message.includes('credito')) {
-      return 'Crédito';
-    }
-
-    if (message.includes('débito') || message.includes('debito')) {
-      return 'Débito';
-    }
-
-    if (message.includes('pix')) {
-      return 'Pix';
-    }
-
-    if (message.includes('dinheiro')) {
-      return 'Dinheiro';
-    }
-
-    return null;
-  }
-
-  private detectAccountOrCard(message: string): string | null {
-    const institutions = [
-      'Nubank',
-      'Inter',
-      'Picpay',
-      'Caixa',
-      'Itau',
-      'Itaú',
-      'Bradesco',
-      'Santander',
-      'BB',
-      'Banco do Brasil',
-    ];
-
-    const foundInstitution = institutions.find((institution) =>
-      message.includes(institution)
-    );
-
-    if (!foundInstitution) return null;
-
-    if (foundInstitution === 'itaú') return 'itau';
-    if (foundInstitution === 'banco do brasil' || foundInstitution === 'bb') {
-      return 'banco do brasil';
-    }
-
-    return foundInstitution;
   }
 }
 

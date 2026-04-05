@@ -3,7 +3,10 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -139,6 +142,7 @@ export default function DebtsScreen() {
       });
 
       closeCreateModal();
+      Keyboard.dismiss();
       await loadDebts(false);
 
       Alert.alert('Sucesso', 'Dívida adicionada com sucesso.');
@@ -164,14 +168,18 @@ export default function DebtsScreen() {
     try {
       setSubmittingMessage(true);
 
+      const trimmedMessage = message.trim();
+
       const response = await api.post('/debts/message', {
-        message,
+        message: trimmedMessage,
       });
+
+      setMessage('');
+      Keyboard.dismiss();
 
       const result = response.data;
 
       if (result?.status === 'created') {
-        setMessage('');
         await loadDebts(false);
         Alert.alert(
           'Sucesso',
@@ -181,7 +189,6 @@ export default function DebtsScreen() {
       }
 
       if (result?.status === 'settled') {
-        setMessage('');
         await loadDebts(false);
         Alert.alert(
           'Sucesso',
@@ -509,181 +516,187 @@ export default function DebtsScreen() {
       edges={['bottom']}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <FlatList
-        data={filteredDebts}
-        keyExtractor={(item) => String(item.id)}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-        contentContainerStyle={styles.content}
-        ListHeaderComponent={
-          <>
-            <View
-              style={[
-                styles.headerCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.title, { color: colors.text }]}>
-                Caderneta
-              </Text>
-              <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-                Acompanhe quem te deve e quem você precisa pagar.
-              </Text>
-
-              <TouchableOpacity
-                style={[
-                  styles.createButton,
-                  { backgroundColor: colors.primary },
-                ]}
-                onPress={() => setShowCreateModal(true)}
-              >
-                <Text style={styles.createButtonText}>Adicionar dívida</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View
-              style={[
-                styles.messageCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.messageTitle, { color: colors.text }]}>
-                Mensagem inteligente
-              </Text>
-              <Text style={[styles.messageSubtitle, { color: colors.textMuted }]}>
-                Exemplos: "João me deve 80 do almoço", "Devo 200 a mainha" ou "João já pagou"
-              </Text>
-
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: colors.inputBackground,
-                    borderColor: colors.border,
-                    color: colors.text,
-                  },
-                ]}
-                placeholder="Digite a mensagem da dívida"
-                placeholderTextColor={colors.textMuted}
-                value={message}
-                onChangeText={setMessage}
-              />
-
-              <TouchableOpacity
-                style={[
-                  styles.primaryButtonInline,
-                  { backgroundColor: colors.primary },
-                  submittingMessage && styles.buttonDisabled,
-                ]}
-                onPress={handleMessageAction}
-                disabled={submittingMessage}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {submittingMessage ? 'Processando...' : 'Enviar mensagem'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.summaryGrid}>
+      <KeyboardAvoidingView
+        style={styles.keyboardContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <FlatList
+          data={filteredDebts}
+          keyExtractor={(item) => String(item.id)}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+          contentContainerStyle={styles.content}
+          ListHeaderComponent={
+            <>
               <View
                 style={[
-                  styles.summaryCard,
+                  styles.headerCard,
                   {
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
                   },
                 ]}
               >
-                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>
-                  A receber
+                <Text style={[styles.title, { color: colors.text }]}>
+                  Caderneta
                 </Text>
-                <Text style={[styles.summaryValue, { color: colors.success }]}>
-                  {formatCurrency(totalToReceive)}
+                <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+                  Acompanhe quem te deve e quem você precisa pagar.
                 </Text>
-              </View>
 
-              <View
-                style={[
-                  styles.summaryCard,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>
-                  A pagar
-                </Text>
-                <Text style={[styles.summaryValue, { color: colors.danger }]}>
-                  {formatCurrency(totalToPay)}
-                </Text>
-              </View>
-            </View>
-
-            <View
-              style={[
-                styles.filtersBar,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.filtersButton,
-                  { backgroundColor: colors.surfaceSecondary },
-                ]}
-                onPress={() => setShowFiltersModal(true)}
-              >
-                <Text style={[styles.filtersButtonText, { color: colors.text }]}>
-                  Filtros
-                </Text>
-              </TouchableOpacity>
-
-              {hasActiveFilters && (
                 <TouchableOpacity
                   style={[
-                    styles.clearFiltersButton,
-                    { backgroundColor: colors.dangerSoft },
+                    styles.createButton,
+                    { backgroundColor: colors.primary },
                   ]}
-                  onPress={() => {
-                    setSearch('');
-                    setTypeFilter('all');
-                    setStatusFilter('all');
-                  }}
+                  onPress={() => setShowCreateModal(true)}
                 >
-                  <Text
-                    style={[
-                      styles.clearFiltersButtonText,
-                      { color: colors.danger },
-                    ]}
-                  >
-                    Limpar
+                  <Text style={styles.createButtonText}>Adicionar dívida</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View
+                style={[
+                  styles.messageCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.messageTitle, { color: colors.text }]}>
+                  Mensagem inteligente
+                </Text>
+                <Text style={[styles.messageSubtitle, { color: colors.textMuted }]}>
+                  Exemplos: "João me deve 80 do almoço", "Devo 200 a mainha" ou "João já pagou"
+                </Text>
+
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      borderColor: colors.border,
+                      color: colors.text,
+                    },
+                  ]}
+                  placeholder="Digite a mensagem da dívida"
+                  placeholderTextColor={colors.textMuted}
+                  value={message}
+                  onChangeText={setMessage}
+                />
+
+                <TouchableOpacity
+                  style={[
+                    styles.primaryButtonInline,
+                    { backgroundColor: colors.primary },
+                    submittingMessage && styles.buttonDisabled,
+                  ]}
+                  onPress={handleMessageAction}
+                  disabled={submittingMessage}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {submittingMessage ? 'Processando...' : 'Enviar mensagem'}
                   </Text>
                 </TouchableOpacity>
-              )}
-            </View>
+              </View>
 
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              {listTitle}
+              <View style={styles.summaryGrid}>
+                <View
+                  style={[
+                    styles.summaryCard,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>
+                    A receber
+                  </Text>
+                  <Text style={[styles.summaryValue, { color: colors.success }]}>
+                    {formatCurrency(totalToReceive)}
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.summaryCard,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>
+                    A pagar
+                  </Text>
+                  <Text style={[styles.summaryValue, { color: colors.danger }]}>
+                    {formatCurrency(totalToPay)}
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={[
+                  styles.filtersBar,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.filtersButton,
+                    { backgroundColor: colors.surfaceSecondary },
+                  ]}
+                  onPress={() => setShowFiltersModal(true)}
+                >
+                  <Text style={[styles.filtersButtonText, { color: colors.text }]}>
+                    Filtros
+                  </Text>
+                </TouchableOpacity>
+
+                {hasActiveFilters && (
+                  <TouchableOpacity
+                    style={[
+                      styles.clearFiltersButton,
+                      { backgroundColor: colors.dangerSoft },
+                    ]}
+                    onPress={() => {
+                      setSearch('');
+                      setTypeFilter('all');
+                      setStatusFilter('all');
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.clearFiltersButtonText,
+                        { color: colors.danger },
+                      ]}
+                    >
+                      Limpar
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                {listTitle}
+              </Text>
+            </>
+          }
+          renderItem={({ item }) => renderDebtCard(item)}
+          ListEmptyComponent={
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+              Nenhuma dívida encontrada para os filtros atuais.
             </Text>
-          </>
-        }
-        renderItem={({ item }) => renderDebtCard(item)}
-        ListEmptyComponent={
-          <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-            Nenhuma dívida encontrada para os filtros atuais.
-          </Text>
-        }
-      />
+          }
+        />
+      </KeyboardAvoidingView>
 
       <Modal
         visible={showFiltersModal}
@@ -701,7 +714,10 @@ export default function DebtsScreen() {
               },
             ]}
           >
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               <Text style={[styles.modalTitle, { color: colors.text }]}>
                 Filtros
               </Text>
@@ -825,7 +841,10 @@ export default function DebtsScreen() {
                     styles.primaryButton,
                     { backgroundColor: colors.primary },
                   ]}
-                  onPress={() => setShowFiltersModal(false)}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setShowFiltersModal(false);
+                  }}
                 >
                   <Text style={styles.primaryButtonText}>Aplicar</Text>
                 </TouchableOpacity>
@@ -851,7 +870,10 @@ export default function DebtsScreen() {
               },
             ]}
           >
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               <Text style={[styles.modalTitle, { color: colors.text }]}>
                 Nova dívida
               </Text>
@@ -1035,6 +1057,9 @@ export default function DebtsScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  keyboardContainer: {
     flex: 1,
   },
   content: {

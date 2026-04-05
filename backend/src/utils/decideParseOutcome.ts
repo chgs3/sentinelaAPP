@@ -1,125 +1,113 @@
-import type { AITransactionOutput } from '../schemas/aiTransactionSchema';
 import type { ParseDecision } from '../types/parseDecision';
-import { detectParseAmbiguities } from './detectParseAmbiguities';
+import type { ParsedTransaction } from '../types/parsedTransaction';
 
-function isEssentiallyValid(parsed: AITransactionOutput) {
-  if (!parsed.type) return false;
-  if (!parsed.amount || parsed.amount <= 0) return false;
-  if (!parsed.description?.trim()) return false;
-  if (!parsed.category?.trim()) return false;
-  if (!parsed.transactionAt?.trim()) return false;
-  return true;
-}
-
-function isClearlySimpleTransaction(message: string, parsed: AITransactionOutput) {
-  const normalized = message
+function normalizeText(value: string) {
+  return value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-
-  const clearIncome =
-    parsed.type === 'income' &&
-    ['recebi', 'ganhei', 'entrou', 'entrada', 'caiu'].some((word) =>
-      normalized.includes(word)
-    );
-
-  const clearExpense =
-    parsed.type === 'expense' &&
-    ['gastei', 'paguei', 'comprei', 'gasto', 'pago'].some((word) =>
-      normalized.includes(word)
-    );
-
-  const hasAmount = !!parsed.amount && parsed.amount > 0;
-  const hasKnownPaymentMethod = !!parsed.paymentMethod;
-  const notTransfer = parsed.possibleTransfer !== true;
-
-  return (clearIncome || clearExpense) && hasAmount && hasKnownPaymentMethod && notTransfer;
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 export function decideParseOutcome(
   message: string,
-  parsed: AITransactionOutput
+  parsed: ParsedTransaction | null
 ): ParseDecision {
-  try {
-    const ambiguities = detectParseAmbiguities(message, parsed);
-    const confidence = parsed.confidence ?? 0;
-
-    if (!isEssentiallyValid(parsed)) {
-      return {
-        status: 'unable_to_parse',
-        reason: 'Campos essenciais insuficientes para registrar a transação.',
-        ambiguities,
-      };
-    }
-
-    if (parsed.possibleTransfer === true) {
-      return {
-        status: 'ignored_transfer',
-        reason:
-          'Isso parece uma transferência entre contas. O Sentinela não registrou como receita nem despesa.',
-        ambiguities,
-      };
-    }
-
-    // Casos simples e claros devem passar mesmo sem IA.
-    if (isClearlySimpleTransaction(message, parsed)) {
-      return {
-        status: 'created',
-        reason: 'Transação simples interpretada com segurança.',
-        ambiguities,
-      };
-    }
-
-    const hardBlockReasons = ambiguities.filter((item) =>
-      [
-        'Valor ausente ou inválido.',
-        'Tipo de transação ausente.',
-        'Descrição muito curta ou ausente.',
-        'Categoria muito curta ou ausente.',
-        'Confiança baixa da IA.',
-      ].includes(item)
-    );
-
-    if (hardBlockReasons.length > 0 || confidence < 0.6) {
-      return {
-        status: 'unable_to_parse',
-        reason: 'Não foi possível interpretar a mensagem com segurança.',
-        ambiguities,
-      };
-    }
-
-    const confirmationTriggers = ambiguities.filter((item) =>
-      [
-        'Categoria muito genérica.',
-        'Expressão temporal potencialmente ambígua.',
-        'Mensagem curta demais para interpretação segura.',
-        'Mensagem ambígua quanto a receita ou despesa.',
-        'Confiança intermediária da IA.',
-        'Descrição genérica demais.',
-      ].includes(item)
-    );
-
-    if (confirmationTriggers.length > 0 || confidence < 0.85) {
-      return {
-        status: 'needs_confirmation',
-        reason: 'A interpretação exige confirmação antes de salvar.',
-        ambiguities,
-      };
-    }
-
-    return {
-      status: 'created',
-      reason: 'Interpretação considerada segura.',
-      ambiguities,
-    };
-  } catch (error) {
-    console.error('Erro em decideParseOutcome:', error);
-
+  if (!parsed) {
     return {
       status: 'unable_to_parse',
-      reason: 'Erro interno ao decidir a interpretação da mensagem.',
-      ambiguities: ['Falha interna no motor de decisão.'],
+      reason: 'Não foi possível interpretar a mensagem com segurança.',
+      ambiguities: ['Nenhuma movimentação válida foi identificada.'],
     };
   }
+
+  const normalized = normalizeText(message);
+  const ambiguities: string[] = [];
+
+  const explicitIncome =
+    normalized.includes('recebi') ||
+    normalized.includes('ganhei') ||
+    normalized.includes('entrou') ||
+    normalized.includes('entrada') ||
+    normalized.includes('caiu') ||
+    normalized.includes('me pagaram');
+
+  const explicitExpense =
+    normalized.includes('gastei') ||
+    normalized.includes('paguei') ||
+    normalized.includes('comprei') ||
+    normalized.includes('gasto') ||
+    normalized.includes('pago') ||
+    normalized.includes('usei');
+
+  const explicitTransfer =
+    normalized.includes('transferi') ||
+    normalized.includes('transferencia') ||
+    normalized.includes('transferência') ||
+    normalized.includes('enviei') ||
+    normalized.includes('mandei') ||
+    normalized.includes('passei') ||
+    normalized.includes('entre contas') ||
+    normalized.includes('minha outra conta');
+
+  if (parsed.possibleTransfer || explicitTransfer) {
+    return {
+      status: 'ignored_transfer',
+      reason:
+        'A mensagem parece representar uma transferência entre contas, então não foi registrada como receita nem despesa.',
+      ambiguities: [],
+    };
+  }
+
+  if (!explicitIncome && !explicitExpense && normalized.includes('pix')) {
+    ambiguities.push('Mensagem com Pix, mas sem contexto claro de entrada ou saída.');
+  }
+
+  if (parsed.category === 'Outros') {
+    ambiguities.push('Categoria muito genérica.');
+  }
+
+  if (
+    parsed.description === 'Pagamento' ||
+    parsed.description === 'Recebimento' ||
+    parsed.description === 'Pagamento via Pix' ||
+    parsed.description === 'Recebimento via Pix'
+  ) {
+    ambiguities.push('Descrição pouco específica.');
+  }
+
+  if (explicitIncome && parsed.type !== 'income') {
+    ambiguities.push('A mensagem parece receita, mas a classificação ficou diferente.');
+  }
+
+  if (explicitExpense && parsed.type !== 'expense') {
+    ambiguities.push('A mensagem parece despesa, mas a classificação ficou diferente.');
+  }
+
+  if (parsed.confidence < 0.45) {
+    ambiguities.push('Confiança baixa da interpretação.');
+  }
+
+  if (parsed.confidence < 0.45) {
+    return {
+      status: 'unable_to_parse',
+      reason: 'Não foi possível interpretar a mensagem com segurança.',
+      ambiguities,
+    };
+  }
+
+  if (ambiguities.length > 0 || parsed.confidence < 0.72) {
+    return {
+      status: 'needs_confirmation',
+      reason: 'A interpretação exige confirmação antes de salvar.',
+      ambiguities,
+    };
+  }
+
+  return {
+    status: 'created',
+    reason: 'Mensagem interpretada com segurança.',
+    ambiguities: [],
+  };
 }
