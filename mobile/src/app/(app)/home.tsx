@@ -24,6 +24,12 @@ import { useFocusEffect, router } from 'expo-router';
 import { api } from '../../services/api';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import {
+  FontSize,
+  FontWeight,
+  Radius,
+  Spacing,
+} from '../../constants/appTheme';
+import {
   formatCurrencyBRL,
   formatDateBR,
   formatMonthYearShort,
@@ -220,11 +226,6 @@ export default function HomeScreen() {
         setPendingConfirmation(result);
         setConfirmationForm(result.parsed);
         setConfirmationAmount(String(result.parsed.amount));
-
-        Alert.alert(
-          'Confirmação necessária',
-          'O Sentinela entendeu sua mensagem, mas quer sua confirmação antes de salvar.'
-        );
         return;
       }
 
@@ -411,6 +412,38 @@ export default function HomeScreen() {
     return formatCurrencyBRL(value);
   }
 
+  function getConfidenceLevel(confidence?: number) {
+    if (confidence === undefined || confidence === null) {
+      return {
+        label: 'Sem nível informado',
+        tone: colors.textMuted,
+        bg: colors.surfaceSecondary,
+      };
+    }
+
+    if (confidence >= 0.8) {
+      return {
+        label: 'Alta confiança',
+        tone: colors.success,
+        bg: colors.successSoft,
+      };
+    }
+
+    if (confidence >= 0.6) {
+      return {
+        label: 'Confiança moderada',
+        tone: colors.primary,
+        bg: colors.primarySoft,
+      };
+    }
+
+    return {
+      label: 'Baixa confiança',
+      tone: colors.danger,
+      bg: colors.dangerSoft,
+    };
+  }
+
   const categories = useMemo(() => {
     const uniqueCategories = Array.from(
       new Set(transactions.map((transaction) => transaction.category))
@@ -482,13 +515,29 @@ export default function HomeScreen() {
     ? 'Transações filtradas'
     : 'Transações';
 
+  const confidenceInfo = useMemo(() => {
+    if (!confirmationForm) return null;
+    return getConfidenceLevel(confirmationForm.confidence);
+  }, [confirmationForm, colors]);
+
+  const confirmationSummary = useMemo(() => {
+    if (!confirmationForm) return null;
+
+    const typeLabel =
+      confirmationForm.type === 'income' ? 'Receita' : 'Despesa';
+
+    return `${typeLabel} de ${formatCurrency(
+      Number(confirmationAmount.replace(/\./g, '').replace(',', '.')) || 0
+    )} em ${confirmationForm.category || 'categoria não definida'}`;
+  }, [confirmationForm, confirmationAmount]);
+
   function renderTransaction({ item }: { item: Transaction }) {
     return (
       <TouchableOpacity
         style={[
           styles.transactionCard,
           {
-            backgroundColor: colors.surface,
+            backgroundColor: colors.card,
             borderColor: colors.border,
           },
         ]}
@@ -528,7 +577,7 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={[
               styles.editButton,
-              { backgroundColor: colors.surfaceSecondary },
+              { backgroundColor: colors.cardMuted },
             ]}
             onPress={() => goToEditTransaction(item.id)}
           >
@@ -591,7 +640,7 @@ export default function HomeScreen() {
                 style={[
                   styles.userCard,
                   {
-                    backgroundColor: colors.surface,
+                    backgroundColor: colors.card,
                     borderColor: colors.border,
                   },
                 ]}
@@ -599,13 +648,16 @@ export default function HomeScreen() {
                 <Text style={[styles.userGreeting, { color: colors.text }]}>
                   Olá, {getFirstName(user?.name)}
                 </Text>
+                <Text style={[styles.userSubtext, { color: colors.textMuted }]}>
+                  Vamos organizar seu mês.
+                </Text>
               </View>
 
               <View
                 style={[
                   styles.periodCard,
                   {
-                    backgroundColor: colors.surface,
+                    backgroundColor: colors.card,
                     borderColor: colors.border,
                   },
                 ]}
@@ -618,7 +670,7 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     style={[
                       styles.periodButton,
-                      { backgroundColor: colors.surfaceSecondary },
+                      { backgroundColor: colors.cardMuted },
                     ]}
                     onPress={goToPreviousMonth}
                   >
@@ -644,7 +696,7 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     style={[
                       styles.periodButton,
-                      { backgroundColor: colors.surfaceSecondary },
+                      { backgroundColor: colors.cardMuted },
                     ]}
                     onPress={goToNextMonth}
                   >
@@ -659,7 +711,7 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   style={[
                     styles.currentMonthButton,
-                    { backgroundColor: colors.surfaceSecondary },
+                    { backgroundColor: colors.cardMuted },
                   ]}
                   onPress={goToCurrentMonth}
                 >
@@ -678,7 +730,7 @@ export default function HomeScreen() {
                 style={[
                   styles.summaryCard,
                   {
-                    backgroundColor: colors.surface,
+                    backgroundColor: colors.card,
                     borderColor: colors.border,
                   },
                 ]}
@@ -686,25 +738,51 @@ export default function HomeScreen() {
                 <Text style={[styles.summaryTitle, { color: colors.text }]}>
                   Resumo do período
                 </Text>
-                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
-                  Receitas: {formatCurrency(summary?.totalIncomes ?? 0)}
-                </Text>
-                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
-                  Despesas: {formatCurrency(summary?.totalExpenses ?? 0)}
-                </Text>
-                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
-                  Saldo: {formatCurrency(summary?.balance ?? 0)}
-                </Text>
-                <Text style={[styles.summaryItem, { color: colors.textMuted }]}>
-                  Transações: {summary?.totalTransactions ?? 0}
-                </Text>
+
+                <View style={styles.summaryGrid}>
+                  <View style={styles.summaryMetric}>
+                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>
+                      Receitas
+                    </Text>
+                    <Text style={[styles.summaryValue, { color: colors.success }]}>
+                      {formatCurrency(summary?.totalIncomes ?? 0)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.summaryMetric}>
+                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>
+                      Despesas
+                    </Text>
+                    <Text style={[styles.summaryValue, { color: colors.danger }]}>
+                      {formatCurrency(summary?.totalExpenses ?? 0)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.summaryMetric}>
+                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>
+                      Saldo
+                    </Text>
+                    <Text style={[styles.summaryValue, { color: colors.text }]}>
+                      {formatCurrency(summary?.balance ?? 0)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.summaryMetric}>
+                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>
+                      Transações
+                    </Text>
+                    <Text style={[styles.summaryValue, { color: colors.text }]}>
+                      {summary?.totalTransactions ?? 0}
+                    </Text>
+                  </View>
+                </View>
               </View>
 
               <View
                 style={[
                   styles.formCard,
                   {
-                    backgroundColor: colors.surface,
+                    backgroundColor: colors.card,
                     borderColor: colors.border,
                   },
                 ]}
@@ -712,20 +790,25 @@ export default function HomeScreen() {
                 <Text style={[styles.formTitle, { color: colors.text }]}>
                   Registrar por mensagem
                 </Text>
+                <Text style={[styles.formSubtitle, { color: colors.textMuted }]}>
+                  Ex.: Gastei 32,50 com uber
+                </Text>
+
                 <TextInput
                   style={[
                     styles.input,
                     {
                       backgroundColor: colors.inputBackground,
-                      borderColor: colors.border,
+                      borderColor: colors.inputBorder,
                       color: colors.text,
                     },
                   ]}
-                  placeholder="Ex.: Gastei 32,50 com uber"
-                  placeholderTextColor={colors.textMuted}
+                  placeholder="Digite sua mensagem"
+                  placeholderTextColor={colors.inputPlaceholder}
                   value={message}
                   onChangeText={setMessage}
                 />
+
                 <TouchableOpacity
                   style={[
                     styles.button,
@@ -745,15 +828,113 @@ export default function HomeScreen() {
                 confirmationForm && (
                   <View
                     style={[
-                      styles.formCard,
+                      styles.confirmationCard,
                       {
-                        backgroundColor: colors.surface,
+                        backgroundColor: colors.card,
                         borderColor: colors.border,
                       },
                     ]}
                   >
-                    <Text style={[styles.formTitle, { color: colors.text }]}>
-                      Revisar antes de salvar
+                    <View style={styles.confirmationHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[styles.confirmationTitle, { color: colors.text }]}
+                        >
+                          Revise antes de salvar
+                        </Text>
+                        <Text
+                          style={[
+                            styles.confirmationSubtitle,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          O Sentinela entendeu sua mensagem, mas quer sua
+                          confirmação antes de registrar.
+                        </Text>
+                      </View>
+
+                      {confidenceInfo && (
+                        <View
+                          style={[
+                            styles.confidenceBadge,
+                            { backgroundColor: confidenceInfo.bg },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.confidenceBadgeText,
+                              { color: confidenceInfo.tone },
+                            ]}
+                          >
+                            {confidenceInfo.label}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <View
+                      style={[
+                        styles.summaryPreviewCard,
+                        {
+                          backgroundColor: colors.cardMuted,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.summaryPreviewLabel,
+                          { color: colors.textMuted },
+                        ]}
+                      >
+                        Resumo entendido
+                      </Text>
+                      <Text
+                        style={[
+                          styles.summaryPreviewValue,
+                          { color: colors.text },
+                        ]}
+                      >
+                        {confirmationSummary}
+                      </Text>
+                    </View>
+
+                    {pendingConfirmation.ambiguities.length > 0 && (
+                      <View style={styles.attentionBox}>
+                        <Text
+                          style={[styles.attentionTitle, { color: colors.text }]}
+                        >
+                          Pontos de atenção
+                        </Text>
+
+                        <View style={styles.ambiguitiesWrap}>
+                          {pendingConfirmation.ambiguities.map((item, index) => (
+                            <View
+                              key={`${item}-${index}`}
+                              style={[
+                                styles.ambiguityChip,
+                                {
+                                  backgroundColor: colors.dangerSoft,
+                                  borderColor: colors.border,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.ambiguityChipText,
+                                  { color: colors.danger },
+                                ]}
+                              >
+                                {item}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                      Ajustes
                     </Text>
 
                     <Text style={[styles.fieldLabel, { color: colors.text }]}>
@@ -767,7 +948,7 @@ export default function HomeScreen() {
                             backgroundColor:
                               confirmationForm.type === 'expense'
                                 ? colors.primary
-                                : colors.surfaceSecondary,
+                                : colors.cardMuted,
                           },
                         ]}
                         onPress={() =>
@@ -796,7 +977,7 @@ export default function HomeScreen() {
                             backgroundColor:
                               confirmationForm.type === 'income'
                                 ? colors.primary
-                                : colors.surfaceSecondary,
+                                : colors.cardMuted,
                           },
                         ]}
                         onPress={() =>
@@ -825,14 +1006,15 @@ export default function HomeScreen() {
                     <TextInput
                       style={[
                         styles.input,
+                        styles.highlightInput,
                         {
                           backgroundColor: colors.inputBackground,
-                          borderColor: colors.border,
+                          borderColor: colors.inputBorder,
                           color: colors.text,
                         },
                       ]}
                       placeholder="Valor"
-                      placeholderTextColor={colors.textMuted}
+                      placeholderTextColor={colors.inputPlaceholder}
                       keyboardType="numeric"
                       value={confirmationAmount}
                       onChangeText={setConfirmationAmount}
@@ -846,12 +1028,18 @@ export default function HomeScreen() {
                         styles.input,
                         {
                           backgroundColor: colors.inputBackground,
-                          borderColor: colors.border,
+                          borderColor:
+                            confirmationForm.description === 'Pagamento' ||
+                            confirmationForm.description === 'Recebimento' ||
+                            confirmationForm.description === 'Pagamento via Pix' ||
+                            confirmationForm.description === 'Recebimento via Pix'
+                              ? colors.danger
+                              : colors.inputBorder,
                           color: colors.text,
                         },
                       ]}
                       placeholder="Descrição"
-                      placeholderTextColor={colors.textMuted}
+                      placeholderTextColor={colors.inputPlaceholder}
                       value={confirmationForm.description}
                       onChangeText={(value) =>
                         updateConfirmationField('description', value)
@@ -866,12 +1054,15 @@ export default function HomeScreen() {
                         styles.input,
                         {
                           backgroundColor: colors.inputBackground,
-                          borderColor: colors.border,
+                          borderColor:
+                            confirmationForm.category === 'Outros'
+                              ? colors.danger
+                              : colors.inputBorder,
                           color: colors.text,
                         },
                       ]}
                       placeholder="Categoria"
-                      placeholderTextColor={colors.textMuted}
+                      placeholderTextColor={colors.inputPlaceholder}
                       value={confirmationForm.category}
                       onChangeText={(value) =>
                         updateConfirmationField('category', value)
@@ -894,7 +1085,7 @@ export default function HomeScreen() {
                               {
                                 backgroundColor: active
                                   ? colors.drawerActiveBg
-                                  : colors.surfaceSecondary,
+                                  : colors.cardMuted,
                               },
                             ]}
                             onPress={() =>
@@ -926,7 +1117,7 @@ export default function HomeScreen() {
                         styles.inputButton,
                         {
                           backgroundColor: colors.inputBackground,
-                          borderColor: colors.border,
+                          borderColor: colors.inputBorder,
                         },
                       ]}
                       onPress={() => setShowDatePicker(true)}
@@ -961,7 +1152,7 @@ export default function HomeScreen() {
                               {
                                 backgroundColor: active
                                   ? colors.primary
-                                  : colors.surfaceSecondary,
+                                  : colors.cardMuted,
                               },
                             ]}
                             onPress={() =>
@@ -992,7 +1183,7 @@ export default function HomeScreen() {
                             backgroundColor:
                               confirmationForm.paymentMethod === null
                                 ? colors.primary
-                                : colors.surfaceSecondary,
+                                : colors.cardMuted,
                           },
                         ]}
                         onPress={() =>
@@ -1023,45 +1214,24 @@ export default function HomeScreen() {
                         styles.input,
                         {
                           backgroundColor: colors.inputBackground,
-                          borderColor: colors.border,
+                          borderColor: colors.inputBorder,
                           color: colors.text,
                         },
                       ]}
                       placeholder="Conta ou cartão"
-                      placeholderTextColor={colors.textMuted}
+                      placeholderTextColor={colors.inputPlaceholder}
                       value={confirmationForm.accountOrCard ?? ''}
                       onChangeText={(value) =>
                         updateConfirmationField('accountOrCard', value)
                       }
                     />
 
-                    {pendingConfirmation.ambiguities.length > 0 && (
-                      <View style={styles.attentionBox}>
-                        <Text
-                          style={[styles.filterLabel, { color: colors.text }]}
-                        >
-                          Pontos de atenção
-                        </Text>
-                        {pendingConfirmation.ambiguities.map((item, index) => (
-                          <Text
-                            key={`${item}-${index}`}
-                            style={[
-                              styles.transactionMeta,
-                              { color: colors.textMuted },
-                            ]}
-                          >
-                            • {item}
-                          </Text>
-                        ))}
-                      </View>
-                    )}
-
                     <View style={styles.confirmationActions}>
                       <TouchableOpacity
                         style={[
                           styles.secondaryButton,
                           {
-                            backgroundColor: colors.surfaceSecondary,
+                            backgroundColor: colors.cardMuted,
                           },
                         ]}
                         onPress={resetConfirmationState}
@@ -1099,7 +1269,7 @@ export default function HomeScreen() {
                 style={[
                   styles.filtersBar,
                   {
-                    backgroundColor: colors.surface,
+                    backgroundColor: colors.card,
                     borderColor: colors.border,
                   },
                 ]}
@@ -1107,7 +1277,7 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   style={[
                     styles.filtersButton,
-                    { backgroundColor: colors.surfaceSecondary },
+                    { backgroundColor: colors.cardMuted },
                   ]}
                   onPress={() => setShowFiltersModal(true)}
                 >
@@ -1148,9 +1318,15 @@ export default function HomeScreen() {
             </>
           }
           ListEmptyComponent={
-            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-              Nenhuma transação encontrada para o período e filtros selecionados.
-            </Text>
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                Nenhuma transação encontrada
+              </Text>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                Tente ajustar os filtros ou registre uma movimentação por
+                mensagem.
+              </Text>
+            </View>
           }
         />
       </KeyboardAvoidingView>
@@ -1161,12 +1337,12 @@ export default function HomeScreen() {
         transparent
         onRequestClose={() => setShowFiltersModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
           <View
             style={[
               styles.modalCard,
               {
-                backgroundColor: colors.surface,
+                backgroundColor: colors.card,
                 borderColor: colors.border,
               },
             ]}
@@ -1184,12 +1360,12 @@ export default function HomeScreen() {
                   styles.input,
                   {
                     backgroundColor: colors.inputBackground,
-                    borderColor: colors.border,
+                    borderColor: colors.inputBorder,
                     color: colors.text,
                   },
                 ]}
                 placeholder="Buscar por descrição, categoria, pix, nubank..."
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.inputPlaceholder}
                 value={search}
                 onChangeText={setSearch}
               />
@@ -1213,7 +1389,7 @@ export default function HomeScreen() {
                         {
                           backgroundColor: active
                             ? colors.primary
-                            : colors.surfaceSecondary,
+                            : colors.cardMuted,
                         },
                       ]}
                       onPress={() =>
@@ -1248,7 +1424,7 @@ export default function HomeScreen() {
                         {
                           backgroundColor: active
                             ? colors.primary
-                            : colors.surfaceSecondary,
+                            : colors.cardMuted,
                         },
                       ]}
                       onPress={() => setCategoryFilter(category)}
@@ -1270,7 +1446,7 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   style={[
                     styles.secondaryButton,
-                    { backgroundColor: colors.surfaceSecondary },
+                    { backgroundColor: colors.cardMuted },
                   ]}
                   onPress={() => {
                     setSearch('');
@@ -1320,123 +1496,223 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
   },
   loadingText: {
-    marginTop: 12,
-    fontSize: 16,
+    marginTop: Spacing.lg,
+    fontSize: FontSize.lg,
   },
   listContent: {
-    padding: 16,
-    paddingBottom: 28,
+    padding: Spacing.lg,
+    paddingBottom: Spacing.xxxl,
   },
   userCard: {
-    padding: 16,
-    borderRadius: 18,
-    marginTop: 12,
-    marginBottom: 16,
+    padding: Spacing.lg,
+    borderRadius: Radius.xl,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.lg,
     borderWidth: 1,
   },
   userGreeting: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.bold,
+  },
+  userSubtext: {
+    marginTop: Spacing.xs,
+    fontSize: FontSize.md,
   },
   periodCard: {
-    padding: 16,
-    borderRadius: 18,
-    marginBottom: 16,
+    padding: Spacing.lg,
+    borderRadius: Radius.xl,
+    marginBottom: Spacing.lg,
     borderWidth: 1,
   },
   periodTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 12,
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.bold,
+    marginBottom: Spacing.md,
   },
   periodControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Spacing.sm,
   },
   periodButton: {
     width: 42,
     height: 42,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   periodButtonText: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: FontSize.xxl,
+    fontWeight: FontWeight.bold,
   },
   periodLabelContainer: {
     flex: 1,
     alignItems: 'center',
   },
   periodLabel: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.bold,
   },
   periodDates: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: FontSize.xs,
+    marginTop: Spacing.xs,
   },
   currentMonthButton: {
-    marginTop: 12,
-    borderRadius: 12,
+    marginTop: Spacing.md,
+    borderRadius: Radius.md,
     paddingVertical: 12,
     alignItems: 'center',
   },
   currentMonthButtonText: {
-    fontWeight: '700',
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.md,
   },
   summaryCard: {
-    padding: 16,
-    borderRadius: 18,
-    marginBottom: 16,
+    padding: Spacing.lg,
+    borderRadius: Radius.xl,
+    marginBottom: Spacing.lg,
     borderWidth: 1,
   },
   summaryTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 12,
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.bold,
+    marginBottom: Spacing.md,
   },
-  summaryItem: {
-    fontSize: 15,
-    marginBottom: 6,
+  summaryGrid: {
+    gap: Spacing.md,
+  },
+  summaryMetric: {
+    gap: Spacing.xs,
+  },
+  summaryLabel: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold,
+  },
+  summaryValue: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
   },
   formCard: {
-    padding: 16,
-    borderRadius: 18,
-    marginBottom: 16,
+    padding: Spacing.lg,
+    borderRadius: Radius.xl,
+    marginBottom: Spacing.lg,
     borderWidth: 1,
   },
   formTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 12,
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.bold,
+    marginBottom: Spacing.xs,
+  },
+  formSubtitle: {
+    fontSize: FontSize.md,
+    marginBottom: Spacing.md,
+  },
+  confirmationCard: {
+    padding: Spacing.lg,
+    borderRadius: Radius.xl,
+    marginBottom: Spacing.lg,
+    borderWidth: 1,
+  },
+  confirmationHeader: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    alignItems: 'flex-start',
+    marginBottom: Spacing.md,
+  },
+  confirmationTitle: {
+    fontSize: FontSize.xxl,
+    fontWeight: FontWeight.bold,
+    marginBottom: Spacing.xs,
+  },
+  confirmationSubtitle: {
+    fontSize: FontSize.md,
+    lineHeight: 20,
+  },
+  confidenceBadge: {
+    borderRadius: Radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  confidenceBadgeText: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+  },
+  summaryPreviewCard: {
+    borderWidth: 1,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  summaryPreviewLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    marginBottom: Spacing.xs,
+    textTransform: 'uppercase',
+  },
+  summaryPreviewValue: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    lineHeight: 22,
+  },
+  attentionBox: {
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.lg,
+  },
+  attentionTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    marginBottom: Spacing.sm,
+  },
+  ambiguitiesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  ambiguityChip: {
+    borderWidth: 1,
+    borderRadius: Radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  ambiguityChipText: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+  },
+  sectionTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   fieldLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 8,
-    marginTop: 4,
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.bold,
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   input: {
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    marginBottom: 12,
-    fontSize: 15,
+    marginBottom: Spacing.md,
+    fontSize: FontSize.md,
+  },
+  highlightInput: {
+    borderWidth: 1.5,
   },
   inputButton: {
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   button: {
-    borderRadius: 14,
+    borderRadius: Radius.lg,
     paddingVertical: 14,
     alignItems: 'center',
   },
@@ -1445,203 +1721,215 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     flex: 1,
-    borderRadius: 14,
+    borderRadius: Radius.lg,
     paddingVertical: 14,
     alignItems: 'center',
   },
   secondaryButtonText: {
-    fontWeight: '700',
-    fontSize: 16,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.lg,
   },
   primaryButton: {
     flex: 1,
-    borderRadius: 14,
+    borderRadius: Radius.lg,
     paddingVertical: 14,
     alignItems: 'center',
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 16,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.lg,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   buttonText: {
     color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  attentionBox: {
-    marginTop: 10,
-    marginBottom: 12,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.lg,
   },
   confirmationActions: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 4,
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
   },
   segmentRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   segmentRowWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   segmentButton: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     paddingVertical: 12,
     alignItems: 'center',
   },
   segmentButtonText: {
-    fontWeight: '700',
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.md,
   },
   pillButton: {
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   pillButtonText: {
-    fontWeight: '600',
+    fontWeight: FontWeight.semibold,
+    fontSize: FontSize.md,
   },
   filtersBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 18,
-    marginBottom: 16,
+    padding: Spacing.lg,
+    borderRadius: Radius.xl,
+    marginBottom: Spacing.lg,
     borderWidth: 1,
   },
   filtersButton: {
-    borderRadius: 12,
+    borderRadius: Radius.md,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
   filtersButtonText: {
-    fontWeight: '700',
-    fontSize: 15,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.md,
   },
   clearFiltersButton: {
-    borderRadius: 12,
+    borderRadius: Radius.md,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
   clearFiltersButtonText: {
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  filterLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 8,
-    marginTop: 4,
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.md,
   },
   filterRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
     flexWrap: 'wrap',
   },
   filterChip: {
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   filterChipText: {
-    fontWeight: '600',
+    fontWeight: FontWeight.semibold,
+    fontSize: FontSize.md,
   },
   categoriesRow: {
-    paddingVertical: 4,
-    gap: 8,
+    paddingVertical: Spacing.xs,
+    gap: Spacing.sm,
   },
   categoryChip: {
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    marginRight: 8,
+    marginRight: Spacing.sm,
   },
   categoryChipText: {
-    fontWeight: '600',
+    fontWeight: FontWeight.semibold,
+    fontSize: FontSize.md,
   },
   listTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 12,
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.bold,
+    marginBottom: Spacing.md,
   },
   transactionCard: {
     padding: 15,
-    borderRadius: 18,
-    marginBottom: 12,
+    borderRadius: Radius.xl,
+    marginBottom: Spacing.md,
     borderWidth: 1,
   },
   transactionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 8,
+    gap: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   transactionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
     flex: 1,
     textTransform: 'capitalize',
   },
   transactionAmount: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.bold,
   },
   transactionMeta: {
-    fontSize: 13,
-    marginBottom: 2,
+    fontSize: FontSize.sm,
+    marginBottom: 3,
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
   },
   editButton: {
     flex: 1,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     alignItems: 'center',
   },
   editButtonText: {
-    fontWeight: '700',
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.md,
   },
   deleteButton: {
     flex: 1,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     alignItems: 'center',
   },
   deleteButtonText: {
-    fontWeight: '700',
+    fontWeight: FontWeight.bold,
+    fontSize: FontSize.md,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xxxl,
+    paddingHorizontal: Spacing.xl,
+  },
+  emptyTitle: {
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.bold,
+    marginBottom: Spacing.sm,
+    textAlign: 'center',
   },
   emptyText: {
     textAlign: 'center',
-    marginTop: 20,
+    fontSize: FontSize.md,
+    lineHeight: 22,
   },
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   modalCard: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
     borderWidth: 1,
-    padding: 16,
+    padding: Spacing.lg,
     maxHeight: '85%',
   },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 16,
+    fontSize: FontSize.title,
+    fontWeight: FontWeight.bold,
+    marginBottom: Spacing.lg,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
   },
 });

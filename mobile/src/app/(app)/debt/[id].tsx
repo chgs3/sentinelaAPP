@@ -13,32 +13,30 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api } from '../../../services/api';
 import { useAppTheme } from '../../../hooks/useAppTheme';
-import {
-  formatCurrencyBRL,
-  formatDateBR,
-  formatPaymentMethod,
-} from '../../../utils/formatters';
-import type { Transaction } from '../../../types';
+import { formatCurrencyBRL, formatDateBR } from '../../../utils/formatters';
+import type { Debt } from '../../../types';
 
-type TransactionType = 'expense' | 'income';
+type DebtType = 'to_receive' | 'to_pay';
+type DebtStatus = 'pending' | 'received' | 'paid';
 
-export default function TransactionDetailsScreen() {
+export default function DebtDetailsScreen() {
   const { colors } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  const [transaction, setTransaction] = useState<Transaction | null>(null);
+  const [debt, setDebt] = useState<Debt | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  async function loadTransaction() {
+  async function loadDebt() {
     try {
       setLoading(true);
 
-      const response = await api.get<Transaction[]>('/transactions');
+      const response = await api.get<Debt[]>('/debts');
       const found = response.data.find((item) => item.id === Number(id));
 
       if (!found) {
-        Alert.alert('Erro', 'Transação não encontrada.', [
+        Alert.alert('Erro', 'Dívida não encontrada.', [
           {
             text: 'OK',
             onPress: () => router.back(),
@@ -47,13 +45,13 @@ export default function TransactionDetailsScreen() {
         return;
       }
 
-      setTransaction(found);
+      setDebt(found);
     } catch (error: any) {
       console.error(error);
 
       const apiMessage =
         error?.response?.data?.message ??
-        'Não foi possível carregar os detalhes da transação.';
+        'Não foi possível carregar os detalhes da dívida.';
 
       Alert.alert('Erro', apiMessage, [
         {
@@ -67,85 +65,143 @@ export default function TransactionDetailsScreen() {
   }
 
   useEffect(() => {
-    loadTransaction();
+    loadDebt();
   }, []);
 
   function formatCurrency(value: number) {
     return formatCurrencyBRL(value);
   }
 
-  function getTransactionTypeLabel(value: TransactionType) {
-    return value === 'income' ? 'Receita' : 'Despesa';
+  function getDebtTypeLabel(value: DebtType) {
+    return value === 'to_receive' ? 'A receber' : 'A pagar';
   }
 
-  function getTypeTone(type: TransactionType) {
-    if (type === 'income') {
-      return {
-        text: colors.success,
-        bg: colors.successSoft ?? colors.surfaceSecondary,
-      };
+  function getDebtStatusLabel(value: DebtStatus) {
+    switch (value) {
+      case 'pending':
+        return 'Pendente';
+      case 'received':
+        return 'Recebido';
+      case 'paid':
+        return 'Pago';
+      default:
+        return value;
     }
-
-    return {
-      text: colors.danger,
-      bg: colors.dangerSoft,
-    };
   }
 
-  const typeLabel = useMemo(() => {
-    if (!transaction) return '';
-    return getTransactionTypeLabel(transaction.type);
-  }, [transaction]);
+  function getStatusTone(status: DebtStatus) {
+    switch (status) {
+      case 'pending':
+        return {
+          text: colors.text,
+          bg: colors.surfaceSecondary,
+        };
+      case 'received':
+        return {
+          text: colors.success,
+          bg: colors.primarySoft,
+        };
+      case 'paid':
+        return {
+          text: colors.primary,
+          bg: colors.primarySoft,
+        };
+      default:
+        return {
+          text: colors.text,
+          bg: colors.surfaceSecondary,
+        };
+    }
+  }
 
-  const typeTone = useMemo(() => {
-    if (!transaction) {
+  const debtTone = useMemo(() => {
+    if (!debt) return colors.text;
+    return debt.type === 'to_receive' ? colors.success : colors.danger;
+  }, [debt, colors]);
+
+  const statusTone = useMemo(() => {
+    if (!debt) {
       return {
         text: colors.text,
         bg: colors.surfaceSecondary,
       };
     }
 
-    return getTypeTone(transaction.type);
-  }, [transaction, colors]);
+    return getStatusTone(debt.status);
+  }, [debt, colors]);
 
-  function goToEditTransaction() {
-    if (!transaction) return;
+  function goToEditDebt() {
+    if (!debt) return;
 
     router.push({
-      pathname: '/edit/[id]',
-      params: { id: String(transaction.id) },
+      pathname: '/debt-edit/[id]',
+      params: { id: String(debt.id) },
     });
   }
 
-  function confirmDeleteTransaction() {
-    if (!transaction) return;
+  async function handleUpdateStatus() {
+    if (!debt || debt.status !== 'pending') return;
+
+    const nextStatus: DebtStatus =
+      debt.type === 'to_receive' ? 'received' : 'paid';
+
+    try {
+      setUpdatingStatus(true);
+
+      await api.patch(`/debts/${debt.id}/status`, {
+        status: nextStatus,
+      });
+
+      Alert.alert(
+        'Sucesso',
+        debt.type === 'to_receive'
+          ? 'Dívida marcada como recebida.'
+          : 'Dívida marcada como paga.'
+      );
+
+      await loadDebt();
+    } catch (error: any) {
+      console.error(error);
+
+      const apiMessage =
+        error?.response?.data?.message ??
+        'Não foi possível atualizar o status da dívida.';
+
+      Alert.alert('Erro', apiMessage);
+    } finally {
+      setUpdatingStatus(false);
+    }
+  }
+
+  function confirmDeleteDebt() {
+    if (!debt) return;
 
     Alert.alert(
-      'Excluir transação',
-      'Tem certeza que deseja excluir esta transação?',
+      'Excluir dívida',
+      'Tem certeza que deseja excluir esta dívida?',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Excluir',
           style: 'destructive',
-          onPress: handleDeleteTransaction,
+          onPress: handleDeleteDebt,
         },
       ]
     );
   }
 
-  async function handleDeleteTransaction() {
-    if (!transaction) return;
+  async function handleDeleteDebt() {
+    if (!debt) return;
 
     try {
       setDeleting(true);
 
-      await api.delete(`/transactions/${transaction.id}`);
+      await api.delete(`/debts/${debt.id}`);
 
-      Alert.alert('Sucesso', 'Transação removida com sucesso.', [
+      Alert.alert('Sucesso', 'Dívida removida com sucesso.', [
         {
           text: 'OK',
-          onPress: () => router.replace('/home'),
+          onPress: () => router.replace('/debts'),
         },
       ]);
     } catch (error: any) {
@@ -153,7 +209,7 @@ export default function TransactionDetailsScreen() {
 
       const apiMessage =
         error?.response?.data?.message ??
-        'Não foi possível remover a transação.';
+        'Não foi possível remover a dívida.';
 
       Alert.alert('Erro', apiMessage);
     } finally {
@@ -174,13 +230,13 @@ export default function TransactionDetailsScreen() {
     );
   }
 
-  if (!transaction) {
+  if (!debt) {
     return (
       <SafeAreaView
         style={[styles.centered, { backgroundColor: colors.background }]}
       >
         <Text style={[styles.loadingText, { color: colors.textMuted }]}>
-          Transação não encontrada.
+          Dívida não encontrada.
         </Text>
       </SafeAreaView>
     );
@@ -207,43 +263,32 @@ export default function TransactionDetailsScreen() {
           <View style={styles.headerTop}>
             <View style={styles.headerTextBlock}>
               <Text style={[styles.title, { color: colors.text }]}>
-                {transaction.description}
+                {debt.personName}
               </Text>
               <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-                Veja os detalhes completos dessa movimentação.
+                {debt.description}
               </Text>
             </View>
 
             <View
               style={[
-                styles.typeBadge,
-                { backgroundColor: typeTone.bg },
+                styles.statusBadge,
+                { backgroundColor: statusTone.bg },
               ]}
             >
               <Text
                 style={[
-                  styles.typeBadgeText,
-                  { color: typeTone.text },
+                  styles.statusBadgeText,
+                  { color: statusTone.text },
                 ]}
               >
-                {typeLabel}
+                {getDebtStatusLabel(debt.status)}
               </Text>
             </View>
           </View>
 
-          <Text
-            style={[
-              styles.amount,
-              {
-                color:
-                  transaction.type === 'income'
-                    ? colors.success
-                    : colors.danger,
-              },
-            ]}
-          >
-            {transaction.type === 'income' ? '+' : '-'}{' '}
-            {formatCurrency(transaction.amount)}
+          <Text style={[styles.amount, { color: debtTone }]}>
+            {formatCurrency(debt.amount)}
           </Text>
 
           <View
@@ -259,50 +304,61 @@ export default function TransactionDetailsScreen() {
               Resumo
             </Text>
             <Text style={[styles.highlightValue, { color: colors.text }]}>
-              {transaction.type === 'income'
-                ? `${transaction.description} entrou como receita no valor de ${formatCurrency(transaction.amount)}`
-                : `${transaction.description} saiu como despesa no valor de ${formatCurrency(transaction.amount)}`}
+              {debt.type === 'to_receive'
+                ? `${debt.personName} te deve ${formatCurrency(debt.amount)}`
+                : `Você deve ${formatCurrency(debt.amount)} para ${debt.personName}`}
             </Text>
           </View>
 
           <View style={styles.infoGroup}>
             <Text style={[styles.label, { color: colors.textMuted }]}>Tipo</Text>
             <Text style={[styles.value, { color: colors.text }]}>
-              {typeLabel}
+              {getDebtTypeLabel(debt.type)}
             </Text>
           </View>
 
           <View style={styles.infoGroup}>
             <Text style={[styles.label, { color: colors.textMuted }]}>
-              Categoria
+              Status
             </Text>
             <Text style={[styles.value, { color: colors.text }]}>
-              {transaction.category}
-            </Text>
-          </View>
-
-          <View style={styles.infoGroup}>
-            <Text style={[styles.label, { color: colors.textMuted }]}>Data</Text>
-            <Text style={[styles.value, { color: colors.text }]}>
-              {formatDateBR(transaction.transactionAt)}
+              {getDebtStatusLabel(debt.status)}
             </Text>
           </View>
 
           <View style={styles.infoGroup}>
             <Text style={[styles.label, { color: colors.textMuted }]}>
-              Forma de pagamento
+              Descrição
             </Text>
             <Text style={[styles.value, { color: colors.text }]}>
-              {formatPaymentMethod(transaction.paymentMethod)}
+              {debt.description}
+            </Text>
+          </View>
+
+          <View style={styles.infoGroup}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>
+              Vencimento
+            </Text>
+            <Text style={[styles.value, { color: colors.text }]}>
+              {debt.dueDate ? formatDateBR(debt.dueDate) : 'Não informado'}
+            </Text>
+          </View>
+
+          <View style={styles.infoGroup}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>
+              Criada em
+            </Text>
+            <Text style={[styles.value, { color: colors.text }]}>
+              {formatDateBR(debt.createdAt)}
             </Text>
           </View>
 
           <View style={styles.infoGroupLast}>
             <Text style={[styles.label, { color: colors.textMuted }]}>
-              Conta/Cartão
+              Última atualização
             </Text>
             <Text style={[styles.value, { color: colors.text }]}>
-              {transaction.accountOrCard ?? 'Não informado'}
+              {formatDateBR(debt.updatedAt)}
             </Text>
           </View>
         </View>
@@ -313,17 +369,32 @@ export default function TransactionDetailsScreen() {
               styles.secondaryActionButton,
               { backgroundColor: colors.surfaceSecondary },
             ]}
-            onPress={goToEditTransaction}
+            onPress={goToEditDebt}
           >
-            <Text
-              style={[
-                styles.secondaryActionButtonText,
-                { color: colors.text },
-              ]}
-            >
-              Editar transação
+            <Text style={[styles.secondaryActionButtonText, { color: colors.text }]}>
+              Editar dívida
             </Text>
           </TouchableOpacity>
+
+          {debt.status === 'pending' && (
+            <TouchableOpacity
+              style={[
+                styles.primaryActionButton,
+                { backgroundColor: colors.primary },
+                updatingStatus && styles.buttonDisabled,
+              ]}
+              onPress={handleUpdateStatus}
+              disabled={updatingStatus}
+            >
+              <Text style={styles.primaryActionText}>
+                {updatingStatus
+                  ? 'Atualizando...'
+                  : debt.type === 'to_receive'
+                  ? 'Marcar como recebida'
+                  : 'Marcar como paga'}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[
@@ -331,11 +402,11 @@ export default function TransactionDetailsScreen() {
               { backgroundColor: colors.dangerSoft },
               deleting && styles.buttonDisabled,
             ]}
-            onPress={confirmDeleteTransaction}
+            onPress={confirmDeleteDebt}
             disabled={deleting}
           >
             <Text style={[styles.deleteButtonText, { color: colors.danger }]}>
-              {deleting ? 'Excluindo...' : 'Excluir transação'}
+              {deleting ? 'Excluindo...' : 'Excluir dívida'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -356,7 +427,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
   },
   loadingText: {
     marginTop: 12,
@@ -381,18 +451,17 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '700',
     marginBottom: 4,
-    lineHeight: 32,
   },
   subtitle: {
     fontSize: 14,
     lineHeight: 20,
   },
-  typeBadge: {
+  statusBadge: {
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  typeBadgeText: {
+  statusBadgeText: {
     fontSize: 12,
     fontWeight: '700',
   },
@@ -443,6 +512,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryActionButtonText: {
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  primaryActionButton: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  primaryActionText: {
+    color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 16,
   },

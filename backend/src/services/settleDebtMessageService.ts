@@ -25,9 +25,12 @@ class SettleDebtMessageService {
       { regex: /^(.+?)\s+j[aá]\s+me\s+pagou$/i, personIndex: 1, targetStatus: 'received' },
       { regex: /^(.+?)\s+quitou$/i, personIndex: 1, targetStatus: 'received' },
       { regex: /^(.+?)\s+quitou\s+a\s+d[ií]vida$/i, personIndex: 1, targetStatus: 'received' },
+      { regex: /^recebi\s+de\s+(.+)$/i, personIndex: 1, targetStatus: 'received' },
+      { regex: /^j[aá]\s+recebi\s+de\s+(.+)$/i, personIndex: 1, targetStatus: 'received' },
 
       { regex: /^j[aá]\s+paguei\s+(.+)$/i, personIndex: 1, targetStatus: 'paid' },
       { regex: /^paguei\s+(.+)$/i, personIndex: 1, targetStatus: 'paid' },
+      { regex: /^quitei\s+com\s+(.+)$/i, personIndex: 1, targetStatus: 'paid' },
       { regex: /^(.+?)\s+recebeu$/i, personIndex: 1, targetStatus: 'paid' },
       { regex: /^(.+?)\s+j[aá]\s+recebeu$/i, personIndex: 1, targetStatus: 'paid' },
     ];

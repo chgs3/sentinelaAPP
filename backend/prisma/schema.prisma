@@ -5,19 +5,20 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 model User {
-  id           Int           @id @default(autoincrement())
-  name         String
-  email        String        @unique
-  passwordHash String
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  transactions Transaction[]
-  debts Debt[]
+  id              Int              @id @default(autoincrement())
+  name            String
+  email           String           @unique
+  passwordHash    String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  transactions    Transaction[]
+  debts           Debt[]
   monthlyClosures MonthlyClosure[]
+  supportTickets  SupportTicket[]
 }
 
 model Transaction {
@@ -66,4 +67,24 @@ model MonthlyClosure {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, month, year])
+}
+
+model SupportTicket {
+  id                 Int      @id @default(autoincrement())
+  category           String
+  subject            String
+  message            String
+  appVersion         String?
+  platform           String?
+  deviceModel        String?
+  osVersion          String?
+  attachmentBase64   String?
+  attachmentMimeType String?
+  attachmentFileName String?
+  status             String   @default("open")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  userId             Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

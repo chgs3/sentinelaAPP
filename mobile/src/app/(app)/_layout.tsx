@@ -196,6 +196,7 @@ export default function AppLayout() {
 
   return (
     <Drawer
+      backBehavior="history"
       drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={({ navigation }) => ({
         headerStyle: {
@@ -322,6 +323,21 @@ export default function AppLayout() {
       />
 
       <Drawer.Screen
+        name="support"
+        options={{
+          title: 'Suporte',
+          drawerLabel: 'Suporte',
+          drawerIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'help-buoy' : 'help-buoy-outline'}
+              size={size ?? 22}
+              color={color}
+            />
+          ),
+        }}
+      />
+
+      <Drawer.Screen
         name="settings"
         options={{
           title: 'Configurações',
@@ -364,6 +380,14 @@ export default function AppLayout() {
         name="debt-edit/[id]"
         options={{
           title: 'Editar dívida',
+          drawerItemStyle: { display: 'none' },
+        }}
+      />
+
+      <Drawer.Screen
+        name="debt/[id]"
+        options={{
+          title: 'Detalhes da dívida',
           drawerItemStyle: { display: 'none' },
         }}
       />

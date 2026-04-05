@@ -1,4 +1,8 @@
-import type { ParsedTransaction, PaymentMethod, TransactionType } from '../types/parsedTransaction';
+import type {
+  ParsedTransaction,
+  PaymentMethod,
+  TransactionType,
+} from '../types/parsedTransaction';
 
 function normalizeText(value: string) {
   return value
@@ -42,7 +46,7 @@ function detectRawDateExpression(normalized: string): string | null {
     'sábado',
     'ultima segunda',
     'última segunda',
-    'ultima terça',
+    'ultima terca',
     'última terça',
     'ultima quarta',
     'última quarta',
@@ -144,7 +148,125 @@ function detectAccountOrCard(normalized: string): string | null {
   return null;
 }
 
-function detectPossibleTransfer(normalized: string, accountOrCard: string | null): boolean {
+function hasAny(normalized: string, items: string[]) {
+  return items.some((item) => normalized.includes(item));
+}
+
+function inferType(
+  normalized: string,
+  paymentMethod: PaymentMethod,
+  accountOrCard: string | null
+): { type: TransactionType | null; confidenceBoost: number } {
+  const incomeSignals = [
+    'recebi',
+    'ganhei',
+    'entrou',
+    'entrada',
+    'caiu',
+    'me pagaram',
+    'depositaram',
+    'reembolso',
+    'salario',
+    'salário',
+    'freela',
+    'freelance',
+    'bonus',
+    'bônus',
+    'comissao',
+    'comissão',
+    'pagamento recebido',
+  ];
+
+  const expenseSignals = [
+    'gastei',
+    'paguei',
+    'comprei',
+    'gasto',
+    'pago',
+    'usei',
+    'debito',
+    'débito',
+    'fatura',
+    'boleto',
+  ];
+
+  if (hasAny(normalized, incomeSignals)) {
+    return { type: 'income', confidenceBoost: 0.28 };
+  }
+
+  if (hasAny(normalized, expenseSignals)) {
+    return { type: 'expense', confidenceBoost: 0.28 };
+  }
+
+  if (
+    hasAny(normalized, [
+      'uber',
+      '99',
+      'ifood',
+      'mercado',
+      'farmacia',
+      'farmácia',
+      'aluguel',
+      'gasolina',
+      'cinema',
+      'restaurante',
+      'lanche',
+      'compra',
+      'compras',
+    ])
+  ) {
+    return { type: 'expense', confidenceBoost: 0.18 };
+  }
+
+  if (
+    hasAny(normalized, [
+      'salario',
+      'salário',
+      'freela',
+      'freelance',
+      'reembolso',
+      'bonus',
+      'bônus',
+      'comissao',
+      'comissão',
+    ])
+  ) {
+    return { type: 'income', confidenceBoost: 0.2 };
+  }
+
+  if (paymentMethod === 'credit' || paymentMethod === 'debit' || paymentMethod === 'cash') {
+    return { type: 'expense', confidenceBoost: 0.12 };
+  }
+
+  if (paymentMethod === 'pix') {
+    if (
+      hasAny(normalized, [
+        'de cliente',
+        'do cliente',
+        'da cliente',
+        'de freela',
+        'de salario',
+        'de salário',
+        'recebido',
+      ])
+    ) {
+      return { type: 'income', confidenceBoost: 0.14 };
+    }
+
+    return { type: null, confidenceBoost: 0.02 };
+  }
+
+  if (accountOrCard) {
+    return { type: 'expense', confidenceBoost: 0.06 };
+  }
+
+  return { type: null, confidenceBoost: 0 };
+}
+
+function detectPossibleTransfer(
+  normalized: string,
+  accountOrCard: string | null
+): boolean {
   const strongTransferSignals = [
     'transferi',
     'transferencia',
@@ -205,57 +327,48 @@ function detectPossibleTransfer(normalized: string, accountOrCard: string | null
   return false;
 }
 
-function inferType(normalized: string): { type: TransactionType | null; confidenceBoost: number } {
-  const incomeSignals = [
-    'recebi',
-    'ganhei',
-    'entrou',
-    'entrada',
-    'caiu',
-    'me pagaram',
-    'depositaram',
-    'reembolso',
-    'salario',
-    'salário',
-    'freela',
-  ];
-
-  const expenseSignals = [
-    'gastei',
-    'paguei',
-    'comprei',
-    'pago',
-    'gasto',
-    'debito',
-    'débito',
-    'usei',
-  ];
-
-  if (incomeSignals.some((signal) => normalized.includes(signal))) {
-    return { type: 'income', confidenceBoost: 0.25 };
-  }
-
-  if (expenseSignals.some((signal) => normalized.includes(signal))) {
-    return { type: 'expense', confidenceBoost: 0.25 };
-  }
-
-  if (normalized.includes('pix')) {
-    return { type: 'expense', confidenceBoost: 0.05 };
-  }
-
-  return { type: null, confidenceBoost: 0 };
-}
-
 function cleanupDescription(value: string | null | undefined) {
-  const cleaned = (value ?? '')
+  return (value ?? '')
     .replace(/^[,.\-:\s]+/, '')
-    .replace(/^(com|de|do|da|no|na|em|via|pelo|pela|para|pra)\s+/i, '')
+    .replace(/[,.\-:\s]+$/, '')
+    .replace(/^(com|de|do|da|no|na|em|via|pelo|pela|para|pra|pro)\s+/i, '')
     .trim();
-
-  return cleaned;
 }
 
-function inferDescription(raw: string, normalized: string, type: TransactionType): string {
+function removeNoiseFromShortMessage(normalized: string) {
+  return normalized
+    .replace(/\d+(?:[.,]\d{1,2})?/g, ' ')
+    .replace(
+      /\b(hoje|ontem|anteontem|domingo|segunda|segunda-feira|terca|terça|terça-feira|quarta|quarta-feira|quinta|quinta-feira|sexta|sexta-feira|sabado|sábado)\b/g,
+      ' '
+    )
+    .replace(
+      /\b(gastei|paguei|comprei|recebi|ganhei|entrou|entrada|caiu|pix|credito|crédito|debito|débito|dinheiro|via|com|de|do|da|no|na|em|para|pra|pro|pelo|pela)\b/g,
+      ' '
+    )
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function inferDescription(
+  raw: string,
+  normalized: string,
+  type: TransactionType,
+  possibleTransfer: boolean
+): string {
+  if (possibleTransfer) {
+    const targetMatch = raw.match(
+      /\b(?:pro|pra|para)\s+(.+)$/i
+    );
+
+    const target = cleanupDescription(targetMatch?.[1]);
+    if (target) {
+      return `Transferência para ${target}`;
+    }
+
+    return 'Transferência entre contas';
+  }
+
   const patterns = [
     /\bgastei\s+\d+(?:[.,]\d{1,2})?\s+(?:com|no|na|em)\s+(.+)$/i,
     /\bpaguei\s+\d+(?:[.,]\d{1,2})?\s+(?:com|no|na|em)?\s*(.+)$/i,
@@ -264,23 +377,36 @@ function inferDescription(raw: string, normalized: string, type: TransactionType
     /\bganhei\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da)?\s*(.+)$/i,
     /\bentrou\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da)?\s*(.+)$/i,
     /\bcaiu\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da)?\s*(.+)$/i,
+    /\bsalario\s+\d+(?:[.,]\d{1,2})?\s*(.*)$/i,
+    /\bsal[aá]rio\s+\d+(?:[.,]\d{1,2})?\s*(.*)$/i,
+    /\bfreela\s+\d+(?:[.,]\d{1,2})?\s*(.*)$/i,
     /\bpix\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|com|para|pra|pro)?\s*(.+)$/i,
-    /\bcredito\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|com)?\s*(.+)$/i,
-    /\bcr[eé]dito\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|com)?\s*(.+)$/i,
-    /\bdebito\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|com)?\s*(.+)$/i,
-    /\bd[eé]bito\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|com)?\s*(.+)$/i,
   ];
 
   for (const pattern of patterns) {
     const match = raw.match(pattern);
     if (match?.[1]?.trim()) {
       const description = cleanupDescription(match[1]);
-      if (description) return description;
+      if (description) return capitalizeDescription(description);
     }
+  }
+
+  const shortMessageDescription = cleanupDescription(
+    removeNoiseFromShortMessage(normalized)
+  );
+
+  if (shortMessageDescription) {
+    return capitalizeDescription(shortMessageDescription);
   }
 
   if (type === 'income') {
     if (normalized.includes('pix')) return 'Recebimento via Pix';
+    if (normalized.includes('salario') || normalized.includes('salário')) {
+      return 'Salário';
+    }
+    if (normalized.includes('freela') || normalized.includes('freelance')) {
+      return 'Freela';
+    }
     return 'Recebimento';
   }
 
@@ -288,8 +414,22 @@ function inferDescription(raw: string, normalized: string, type: TransactionType
   return 'Pagamento';
 }
 
-function inferCategory(normalized: string, type: TransactionType): string {
-  const includesAny = (items: string[]) => items.some((item) => normalized.includes(item));
+function capitalizeDescription(value: string) {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function inferCategory(
+  normalized: string,
+  description: string,
+  type: TransactionType,
+  possibleTransfer: boolean
+): string {
+  if (possibleTransfer) return 'Transferência';
+
+  const text = `${normalized} ${normalizeText(description)}`;
+
+  const includesAny = (items: string[]) => items.some((item) => text.includes(item));
 
   if (
     includesAny([
@@ -401,6 +541,15 @@ function inferCategory(normalized: string, type: TransactionType): string {
       'cliente',
       'estagio',
       'estágio',
+      'freela',
+      'freelance',
+      'salario',
+      'salário',
+      'reembolso',
+      'bonus',
+      'bônus',
+      'comissao',
+      'comissão',
     ])
   ) {
     return 'Trabalho';
@@ -422,25 +571,63 @@ function inferCategory(normalized: string, type: TransactionType): string {
     return 'Compras';
   }
 
+  return type === 'income' ? 'Trabalho' : 'Outros';
+}
+
+function inferConfidence(params: {
+  normalized: string;
+  typeWasExplicit: boolean;
+  paymentMethod: PaymentMethod;
+  accountOrCard: string | null;
+  category: string;
+  description: string;
+  possibleTransfer: boolean;
+  rawDateExpression: string | null;
+}) {
+  const {
+    normalized,
+    typeWasExplicit,
+    paymentMethod,
+    accountOrCard,
+    category,
+    description,
+    possibleTransfer,
+    rawDateExpression,
+  } = params;
+
+  let confidence = 0.42;
+
+  if (typeWasExplicit) confidence += 0.22;
+  if (paymentMethod) confidence += 0.08;
+  if (accountOrCard) confidence += 0.04;
+  if (category !== 'Outros') confidence += 0.12;
+  if (category === 'Transferência') confidence += 0.08;
+  if (rawDateExpression) confidence += 0.04;
+
   if (
-    includesAny([
-      'salario',
-      'salário',
-      'freela',
-      'freelance',
-      'reembolso',
-      'pagamento recebido',
-      'cliente',
-      'bonus',
-      'bônus',
-      'comissao',
-      'comissão',
-    ])
+    ![
+      'Pagamento',
+      'Recebimento',
+      'Pagamento via Pix',
+      'Recebimento via Pix',
+    ].includes(description)
   ) {
-    return 'Trabalho';
+    confidence += 0.08;
   }
 
-  return type === 'income' ? 'Trabalho' : 'Outros';
+  if (
+    normalized.includes('pix') &&
+    !hasAny(normalized, ['recebi', 'ganhei', 'gastei', 'paguei']) &&
+    !possibleTransfer
+  ) {
+    confidence -= 0.1;
+  }
+
+  if (possibleTransfer) {
+    confidence -= 0.06;
+  }
+
+  return Math.max(0.2, Math.min(0.94, confidence));
 }
 
 class ParseTransactionMessageService {
@@ -451,50 +638,47 @@ class ParseTransactionMessageService {
     const amount = extractAmount(raw);
     if (!amount) return null;
 
-    const { type, confidenceBoost } = inferType(normalized);
     const paymentMethod = detectPaymentMethod(normalized);
     const accountOrCard = detectAccountOrCard(normalized);
     const possibleTransfer = detectPossibleTransfer(normalized, accountOrCard);
-
-    const finalType: TransactionType =
-      type ??
-      (paymentMethod === 'credit' ||
-        paymentMethod === 'debit' ||
-        paymentMethod === 'cash'
-        ? 'expense'
-        : 'expense');
-
-    const description = inferDescription(raw, normalized, finalType);
-    const category = inferCategory(normalized, finalType);
     const rawDateExpression = detectRawDateExpression(normalized);
 
-    let confidence = 0.4 + confidenceBoost;
+    const inferredType = inferType(normalized, paymentMethod, accountOrCard);
 
-    if (paymentMethod) confidence += 0.08;
-    if (accountOrCard) confidence += 0.04;
-    if (category !== 'Outros') confidence += 0.12;
-    if (
-      description !== 'Pagamento' &&
-      description !== 'Recebimento' &&
-      description !== 'Pagamento via Pix' &&
-      description !== 'Recebimento via Pix'
-    ) {
-      confidence += 0.08;
+    let finalType: TransactionType;
+
+    if (possibleTransfer) {
+      finalType = 'expense';
+    } else if (inferredType.type) {
+      finalType = inferredType.type;
+    } else {
+      finalType = 'expense';
     }
 
-    if (possibleTransfer) confidence -= 0.12;
+    const description = inferDescription(
+      raw,
+      normalized,
+      finalType,
+      possibleTransfer
+    );
 
-    if (
-      normalized.includes('pix') &&
-      !normalized.includes('recebi') &&
-      !normalized.includes('ganhei') &&
-      !normalized.includes('gastei') &&
-      !normalized.includes('paguei')
-    ) {
-      confidence -= 0.08;
-    }
+    const category = inferCategory(
+      normalized,
+      description,
+      finalType,
+      possibleTransfer
+    );
 
-    confidence = Math.max(0.2, Math.min(0.92, confidence));
+    const confidence = inferConfidence({
+      normalized,
+      typeWasExplicit: inferredType.type !== null,
+      paymentMethod,
+      accountOrCard,
+      category,
+      description,
+      possibleTransfer,
+      rawDateExpression,
+    });
 
     return {
       type: finalType,

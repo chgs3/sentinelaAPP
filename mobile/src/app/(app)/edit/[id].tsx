@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,7 +19,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api } from '../../../services/api';
 import { useAppTheme } from '../../../hooks/useAppTheme';
-import { formatPaymentMethod } from '../../../utils/formatters';
+import {
+  formatCurrencyBRL,
+  formatPaymentMethod,
+} from '../../../utils/formatters';
 import type { Transaction } from '../../../types';
 
 type EditableTransactionType = 'expense' | 'income';
@@ -116,9 +119,7 @@ export default function EditTransactionScreen() {
       return;
     }
 
-    const parsedAmount = Number(
-      amount.replace(/\./g, '').replace(',', '.')
-    );
+    const parsedAmount = Number(amount.replace(/\./g, '').replace(',', '.'));
 
     if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
       Alert.alert('Atenção', 'Informe um valor válido.');
@@ -157,6 +158,32 @@ export default function EditTransactionScreen() {
     }
   }
 
+  const previewAmount = useMemo(() => {
+    const parsed = Number(amount.replace(/\./g, '').replace(',', '.'));
+
+    if (Number.isNaN(parsed) || parsed <= 0) {
+      return 'R$ 0,00';
+    }
+
+    return formatCurrencyBRL(parsed);
+  }, [amount]);
+
+  const typeConfig = useMemo(() => {
+    if (type === 'income') {
+      return {
+        label: 'Receita',
+        color: colors.success,
+        bg: colors.successSoft ?? colors.surfaceSecondary,
+      };
+    }
+
+    return {
+      label: 'Despesa',
+      color: colors.danger,
+      bg: colors.dangerSoft,
+    };
+  }, [type, colors]);
+
   if (loading) {
     return (
       <SafeAreaView
@@ -186,15 +213,79 @@ export default function EditTransactionScreen() {
         >
           <View
             style={[
-              styles.card,
+              styles.heroCard,
               {
                 backgroundColor: colors.surface,
                 borderColor: colors.border,
               },
             ]}
           >
-            <Text style={[styles.title, { color: colors.text }]}>
-              Editar transação
+            <View style={styles.heroTopRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.title, { color: colors.text }]}>
+                  Editar transação
+                </Text>
+                <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+                  Revise os dados abaixo antes de salvar as alterações.
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.typeBadge,
+                  { backgroundColor: typeConfig.bg },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.typeBadgeText,
+                    { color: typeConfig.color },
+                  ]}
+                >
+                  {typeConfig.label}
+                </Text>
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.previewCard,
+                {
+                  backgroundColor: colors.surfaceSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.previewLabel, { color: colors.textMuted }]}
+              >
+                Valor atual da edição
+              </Text>
+              <Text
+                style={[
+                  styles.previewValue,
+                  {
+                    color:
+                      type === 'income' ? colors.success : colors.danger,
+                  },
+                ]}
+              >
+                {type === 'income' ? '+' : '-'} {previewAmount}
+              </Text>
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.sectionCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Informações principais
             </Text>
 
             <Text style={[styles.fieldLabel, { color: colors.text }]}>Tipo</Text>
@@ -252,6 +343,7 @@ export default function EditTransactionScreen() {
             <TextInput
               style={[
                 styles.input,
+                styles.highlightInput,
                 {
                   backgroundColor: colors.inputBackground,
                   borderColor: colors.border,
@@ -325,9 +417,19 @@ export default function EditTransactionScreen() {
                 onChange={handleDateChange}
               />
             )}
+          </View>
 
-            <Text style={[styles.fieldLabel, { color: colors.text }]}>
-              Forma de pagamento
+          <View
+            style={[
+              styles.sectionCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Pagamento
             </Text>
 
             <Text style={[styles.currentPaymentText, { color: colors.textMuted }]}>
@@ -383,21 +485,21 @@ export default function EditTransactionScreen() {
               value={accountOrCard}
               onChangeText={setAccountOrCard}
             />
-
-            <TouchableOpacity
-              style={[
-                styles.saveButton,
-                { backgroundColor: colors.primary },
-                saving && styles.buttonDisabled,
-              ]}
-              onPress={handleSave}
-              disabled={saving}
-            >
-              <Text style={styles.saveButtonText}>
-                {saving ? 'Salvando...' : 'Salvar alterações'}
-              </Text>
-            </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={[
+              styles.saveButton,
+              { backgroundColor: colors.primary },
+              saving && styles.buttonDisabled,
+            ]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            <Text style={styles.saveButtonText}>
+              {saving ? 'Salvando...' : 'Salvar alterações'}
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -413,7 +515,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 28,
+    paddingBottom: 32,
   },
   centered: {
     flex: 1,
@@ -424,15 +526,62 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
   },
-  card: {
+  heroCard: {
     borderWidth: 1,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 16,
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+    marginBottom: 14,
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  typeBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  typeBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  previewCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+  },
+  previewLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  previewValue: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  sectionCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
     marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 12,
   },
   fieldLabel: {
     fontSize: 14,
@@ -448,6 +597,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontSize: 15,
   },
+  highlightInput: {
+    borderWidth: 1.5,
+  },
   inputButton: {
     borderWidth: 1,
     borderRadius: 14,
@@ -457,7 +609,7 @@ const styles = StyleSheet.create({
   },
   currentPaymentText: {
     fontSize: 13,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   segmentRow: {
     flexDirection: 'row',
@@ -488,8 +640,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   saveButton: {
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: 16,
+    paddingVertical: 15,
     alignItems: 'center',
     marginTop: 4,
   },
