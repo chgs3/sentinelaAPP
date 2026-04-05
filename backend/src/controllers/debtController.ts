@@ -15,6 +15,7 @@ function normalizeText(value: string) {
   return value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
     .toLowerCase()
     .trim();
 }
@@ -29,7 +30,8 @@ function isSameOrContainedPersonName(a: string, b: string) {
   const tokensA = na.split(' ').filter(Boolean);
   const tokensB = nb.split(' ').filter(Boolean);
 
-  return tokensA.some((tokenA) => tokensB.includes(tokenA));
+  const commonTokens = tokensA.filter((tokenA) => tokensB.includes(tokenA));
+  return commonTokens.length > 0;
 }
 
 function countNameTokens(name: string) {
@@ -42,6 +44,48 @@ function buildNeedsConfirmationResponse(message: string, ambiguities: string[]) 
     message,
     ambiguities,
   };
+}
+
+function isAmbiguousShortName(personName: string) {
+  return countNameTokens(personName) === 1 && personName.length <= 2;
+}
+
+async function findMatchingPendingDebts(
+  userId: number,
+  personName: string,
+  targetStatus: 'received' | 'paid'
+) {
+  const pendingDebts = await prisma.debt.findMany({
+    where: {
+      userId,
+      status: 'pending',
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+  return pendingDebts.filter((debt) => {
+    const samePerson = isSameOrContainedPersonName(debt.personName, personName);
+
+    if (!samePerson) return false;
+
+    if (targetStatus === 'received') {
+      return debt.type === 'to_receive';
+    }
+
+    return debt.type === 'to_pay';
+  });
+}
+
+async function settleSingleDebt(
+  debtId: number,
+  targetStatus: 'received' | 'paid'
+) {
+  return prisma.debt.update({
+    where: { id: debtId },
+    data: { status: targetStatus },
+  });
 }
 
 class DebtController {
@@ -115,7 +159,7 @@ class DebtController {
         });
       }
 
-      if (countNameTokens(parsed.personName) === 1 && parsed.personName.length <= 2) {
+      if (isAmbiguousShortName(parsed.personName)) {
         return res.status(200).json(
           buildNeedsConfirmationResponse(
             'A mensagem parece incompleta para registrar a dívida.',
@@ -178,7 +222,7 @@ class DebtController {
         });
       }
 
-      if (countNameTokens(parsed.personName) === 1 && parsed.personName.length <= 2) {
+      if (isAmbiguousShortName(parsed.personName)) {
         return res.status(200).json(
           buildNeedsConfirmationResponse(
             'A mensagem parece incompleta para dar baixa na dívida.',
@@ -187,30 +231,11 @@ class DebtController {
         );
       }
 
-      const pendingDebts = await prisma.debt.findMany({
-        where: {
-          userId,
-          status: 'pending',
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      });
-
-      const matchingDebts = pendingDebts.filter((debt) => {
-        const samePerson = isSameOrContainedPersonName(
-          debt.personName,
-          parsed.personName
-        );
-
-        if (!samePerson) return false;
-
-        if (parsed.targetStatus === 'received') {
-          return debt.type === 'to_receive';
-        }
-
-        return debt.type === 'to_pay';
-      });
+      const matchingDebts = await findMatchingPendingDebts(
+        userId,
+        parsed.personName,
+        parsed.targetStatus
+      );
 
       if (matchingDebts.length === 0) {
         return res.status(404).json({
@@ -232,16 +257,10 @@ class DebtController {
         );
       }
 
-      const targetDebt = matchingDebts[0];
-
-      const updatedDebt = await prisma.debt.update({
-        where: {
-          id: targetDebt.id,
-        },
-        data: {
-          status: parsed.targetStatus,
-        },
-      });
+      const updatedDebt = await settleSingleDebt(
+        matchingDebts[0].id,
+        parsed.targetStatus
+      );
 
       return res.status(200).json({
         status: 'settled',
@@ -282,10 +301,7 @@ class DebtController {
       const settleParsed = settleDebtMessageService.execute(message);
 
       if (settleParsed) {
-        if (
-          countNameTokens(settleParsed.personName) === 1 &&
-          settleParsed.personName.length <= 2
-        ) {
+        if (isAmbiguousShortName(settleParsed.personName)) {
           return res.status(200).json(
             buildNeedsConfirmationResponse(
               'A mensagem parece incompleta para dar baixa na dívida.',
@@ -294,30 +310,11 @@ class DebtController {
           );
         }
 
-        const pendingDebts = await prisma.debt.findMany({
-          where: {
-            userId,
-            status: 'pending',
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-        });
-
-        const matchingDebts = pendingDebts.filter((debt) => {
-          const samePerson = isSameOrContainedPersonName(
-            debt.personName,
-            settleParsed.personName
-          );
-
-          if (!samePerson) return false;
-
-          if (settleParsed.targetStatus === 'received') {
-            return debt.type === 'to_receive';
-          }
-
-          return debt.type === 'to_pay';
-        });
+        const matchingDebts = await findMatchingPendingDebts(
+          userId,
+          settleParsed.personName,
+          settleParsed.targetStatus
+        );
 
         if (matchingDebts.length === 0) {
           return res.status(404).json({
@@ -339,16 +336,10 @@ class DebtController {
           );
         }
 
-        const targetDebt = matchingDebts[0];
-
-        const updatedDebt = await prisma.debt.update({
-          where: {
-            id: targetDebt.id,
-          },
-          data: {
-            status: settleParsed.targetStatus,
-          },
-        });
+        const updatedDebt = await settleSingleDebt(
+          matchingDebts[0].id,
+          settleParsed.targetStatus
+        );
 
         return res.status(200).json({
           status: 'settled',
@@ -365,10 +356,7 @@ class DebtController {
       if (createParsed) {
         const ambiguities: string[] = [];
 
-        if (
-          countNameTokens(createParsed.personName) === 1 &&
-          createParsed.personName.length <= 2
-        ) {
+        if (isAmbiguousShortName(createParsed.personName)) {
           ambiguities.push('Nome da pessoa muito curto ou ambíguo.');
         }
 

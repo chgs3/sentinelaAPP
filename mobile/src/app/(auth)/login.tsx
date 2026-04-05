@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
 import { api } from '../../services/api';
 import { saveToken } from '../../services/authStorage';
@@ -34,7 +35,7 @@ export default function LoginScreen() {
       setSubmitting(true);
 
       const response = await api.post('/auth/login', {
-        email,
+        email: email.trim(),
         password,
       });
 
@@ -70,18 +71,52 @@ export default function LoginScreen() {
         >
           <View
             style={[
-              styles.card,
+              styles.heroCard,
               {
                 backgroundColor: colors.surface,
                 borderColor: colors.border,
               },
             ]}
           >
+            <View
+              style={[
+                styles.heroIcon,
+                {
+                  backgroundColor:
+                    colors.primarySoft ?? colors.surfaceSecondary,
+                },
+              ]}
+            >
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={24}
+                color={colors.primary}
+              />
+            </View>
+
             <Text style={[styles.title, { color: colors.text }]}>Entrar</Text>
             <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-              Acesse o Sentinela com sua conta.
+              Acesse o Sentinela e continue registrando sua vida financeira com
+              rapidez.
+            </Text>
+          </View>
+
+          <View
+            style={[
+              styles.formCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Dados de acesso
             </Text>
 
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>
+              Email
+            </Text>
             <TextInput
               style={[
                 styles.input,
@@ -91,14 +126,18 @@ export default function LoginScreen() {
                   color: colors.text,
                 },
               ]}
-              placeholder="Email"
+              placeholder="Digite seu email"
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
+              autoCorrect={false}
               keyboardType="email-address"
               value={email}
               onChangeText={setEmail}
             />
 
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>
+              Senha
+            </Text>
             <TextInput
               style={[
                 styles.input,
@@ -108,7 +147,7 @@ export default function LoginScreen() {
                   color: colors.text,
                 },
               ]}
-              placeholder="Senha"
+              placeholder="Digite sua senha"
               placeholderTextColor={colors.textMuted}
               secureTextEntry
               value={password}
@@ -117,23 +156,50 @@ export default function LoginScreen() {
 
             <TouchableOpacity
               style={[
-                styles.button,
+                styles.primaryButton,
                 { backgroundColor: colors.primary },
                 submitting && styles.buttonDisabled,
               ]}
               onPress={handleLogin}
               disabled={submitting}
             >
-              <Text style={styles.buttonText}>
+              <Text style={styles.primaryButtonText}>
                 {submitting ? 'Entrando...' : 'Entrar'}
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => router.push('/register')}>
-              <Text style={[styles.link, { color: colors.primary }]}>
+            <TouchableOpacity
+              style={[
+                styles.secondaryButton,
+                { backgroundColor: colors.surfaceSecondary },
+              ]}
+              onPress={() => router.push('/register')}
+              disabled={submitting}
+            >
+              <Text
+                style={[styles.secondaryButtonText, { color: colors.text }]}
+              >
                 Criar conta
               </Text>
             </TouchableOpacity>
+          </View>
+
+          <View
+            style={[
+              styles.helperCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.helperTitle, { color: colors.text }]}>
+              Primeiro acesso?
+            </Text>
+            <Text style={[styles.helperText, { color: colors.textMuted }]}>
+              Crie sua conta para começar a registrar transações, acompanhar
+              dívidas e visualizar seus dashboards.
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -152,11 +218,22 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     padding: 16,
+    paddingBottom: 28,
   },
-  card: {
-    padding: 18,
-    borderRadius: 20,
+  heroCard: {
     borderWidth: 1,
+    borderRadius: 22,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  heroIcon: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
   title: {
     fontSize: 28,
@@ -165,7 +242,25 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
-    marginBottom: 18,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  formCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 14,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 8,
+    marginTop: 2,
   },
   input: {
     borderWidth: 1,
@@ -175,23 +270,42 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontSize: 15,
   },
-  button: {
+  primaryButton: {
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 4,
+    marginBottom: 10,
   },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
+  primaryButtonText: {
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 16,
   },
-  link: {
-    marginTop: 16,
-    textAlign: 'center',
-    fontWeight: '600',
+  secondaryButton: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  helperCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+  },
+  helperTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  helperText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,6 +9,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -18,6 +19,7 @@ import DateTimePicker, {
 
 import { api } from '../../../services/api';
 import { useAppTheme } from '../../../hooks/useAppTheme';
+import { formatCurrencyBRL, formatDateBR } from '../../../utils/formatters';
 import type { Debt } from '../../../types';
 
 type DebtType = 'to_receive' | 'to_pay';
@@ -138,6 +140,45 @@ export default function EditDebtScreen() {
     }
   }
 
+  const previewAmount = useMemo(() => {
+    const parsed = Number(amount.replace(/\./g, '').replace(',', '.'));
+
+    if (Number.isNaN(parsed) || parsed <= 0) {
+      return 'R$ 0,00';
+    }
+
+    return formatCurrencyBRL(parsed);
+  }, [amount]);
+
+  const typeConfig = useMemo(() => {
+    if (type === 'to_receive') {
+      return {
+        label: 'A receber',
+        color: colors.success,
+        bg: colors.successSoft ?? colors.surfaceSecondary,
+      };
+    }
+
+    return {
+      label: 'A pagar',
+      color: colors.danger,
+      bg: colors.dangerSoft,
+    };
+  }, [type, colors]);
+
+  function getStatusLabel(value: DebtStatus) {
+    switch (value) {
+      case 'pending':
+        return 'Pendente';
+      case 'received':
+        return 'Recebido';
+      case 'paid':
+        return 'Pago';
+      default:
+        return value;
+    }
+  }
+
   if (loading) {
     return (
       <SafeAreaView
@@ -165,163 +206,271 @@ export default function EditDebtScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={[styles.title, { color: colors.text }]}>
-            Editar dívida
-          </Text>
-
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>
-            Nome da pessoa
-          </Text>
-          <TextInput
+          <View
             style={[
-              styles.input,
+              styles.heroCard,
               {
-                backgroundColor: colors.inputBackground,
+                backgroundColor: colors.surface,
                 borderColor: colors.border,
-                color: colors.text,
               },
             ]}
-            placeholder="Ex.: João"
-            placeholderTextColor={colors.textMuted}
-            value={personName}
-            onChangeText={setPersonName}
-          />
-
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>Tipo</Text>
-          <TouchableOpacity
-            style={[
-              styles.segmentButton,
-              {
-                backgroundColor:
-                  type === 'to_receive'
-                    ? colors.primary
-                    : colors.surfaceSecondary,
-              },
-            ]}
-            onPress={() => setType('to_receive')}
           >
-            <Text
-              style={[
-                styles.segmentButtonText,
-                { color: type === 'to_receive' ? '#FFFFFF' : colors.text },
-              ]}
-            >
-              A receber
-            </Text>
-          </TouchableOpacity>
+            <View style={styles.heroTopRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.title, { color: colors.text }]}>
+                  Editar dívida
+                </Text>
+                <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+                  Atualize os dados da caderneta antes de salvar.
+                </Text>
+              </View>
 
-          <TouchableOpacity
-            style={[
-              styles.segmentButton,
-              styles.segmentButtonSpacing,
-              {
-                backgroundColor:
-                  type === 'to_pay' ? colors.primary : colors.surfaceSecondary,
-              },
-            ]}
-            onPress={() => setType('to_pay')}
-          >
-            <Text
-              style={[
-                styles.segmentButtonText,
-                { color: type === 'to_pay' ? '#FFFFFF' : colors.text },
-              ]}
-            >
-              A pagar
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>Valor</Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.border,
-                color: colors.text,
-              },
-            ]}
-            placeholder="Ex.: 80,00"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="numeric"
-            value={amount}
-            onChangeText={setAmount}
-          />
-
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>
-            Descrição
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.border,
-                color: colors.text,
-              },
-            ]}
-            placeholder="Descrição"
-            placeholderTextColor={colors.textMuted}
-            value={description}
-            onChangeText={setDescription}
-          />
-
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>Status</Text>
-          {(['pending', 'received', 'paid'] as DebtStatus[]).map((item) => (
-            <TouchableOpacity
-              key={item}
-              style={[
-                styles.segmentButton,
-                {
-                  backgroundColor:
-                    status === item ? colors.primary : colors.surfaceSecondary,
-                },
-              ]}
-              onPress={() => setStatus(item)}
-            >
-              <Text
+              <View
                 style={[
-                  styles.segmentButtonText,
-                  { color: status === item ? '#FFFFFF' : colors.text },
+                  styles.typeBadge,
+                  { backgroundColor: typeConfig.bg },
                 ]}
               >
-                {item === 'pending'
-                  ? 'Pendente'
-                  : item === 'received'
-                  ? 'Recebido'
-                  : 'Pago'}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text
+                  style={[
+                    styles.typeBadgeText,
+                    { color: typeConfig.color },
+                  ]}
+                >
+                  {typeConfig.label}
+                </Text>
+              </View>
+            </View>
 
-          <Text style={[styles.fieldLabel, { color: colors.text }]}>
-            Vencimento
-          </Text>
-          <TouchableOpacity
+            <View
+              style={[
+                styles.previewCard,
+                {
+                  backgroundColor: colors.surfaceSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.previewLabel, { color: colors.textMuted }]}
+              >
+                Valor atual da edição
+              </Text>
+              <Text
+                style={[
+                  styles.previewValue,
+                  {
+                    color:
+                      type === 'to_receive' ? colors.success : colors.danger,
+                  },
+                ]}
+              >
+                {previewAmount}
+              </Text>
+              <Text
+                style={[styles.previewMeta, { color: colors.textMuted }]}
+              >
+                Status: {getStatusLabel(status)}
+              </Text>
+            </View>
+          </View>
+
+          <View
             style={[
-              styles.inputButton,
+              styles.sectionCard,
               {
-                backgroundColor: colors.inputBackground,
+                backgroundColor: colors.surface,
                 borderColor: colors.border,
               },
             ]}
-            onPress={() => setShowDueDatePicker(true)}
           >
-            <Text style={{ color: colors.text }}>
-              {dueDate
-                ? dueDate.toLocaleDateString('pt-BR')
-                : 'Selecionar data (opcional)'}
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Informações principais
             </Text>
-          </TouchableOpacity>
 
-          {showDueDatePicker && (
-            <DateTimePicker
-              value={dueDate ?? new Date()}
-              mode="date"
-              display="default"
-              onChange={handleDueDateChange}
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>
+              Nome da pessoa
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="Ex.: João"
+              placeholderTextColor={colors.textMuted}
+              value={personName}
+              onChangeText={setPersonName}
             />
-          )}
+
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Tipo</Text>
+            <View style={styles.segmentRow}>
+              <TouchableOpacity
+                style={[
+                  styles.segmentButton,
+                  {
+                    backgroundColor:
+                      type === 'to_receive'
+                        ? colors.primary
+                        : colors.surfaceSecondary,
+                  },
+                ]}
+                onPress={() => setType('to_receive')}
+              >
+                <Text
+                  style={[
+                    styles.segmentButtonText,
+                    {
+                      color: type === 'to_receive' ? '#FFFFFF' : colors.text,
+                    },
+                  ]}
+                >
+                  A receber
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.segmentButton,
+                  {
+                    backgroundColor:
+                      type === 'to_pay'
+                        ? colors.primary
+                        : colors.surfaceSecondary,
+                  },
+                ]}
+                onPress={() => setType('to_pay')}
+              >
+                <Text
+                  style={[
+                    styles.segmentButtonText,
+                    {
+                      color: type === 'to_pay' ? '#FFFFFF' : colors.text,
+                    },
+                  ]}
+                >
+                  A pagar
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Valor</Text>
+            <TextInput
+              style={[
+                styles.input,
+                styles.highlightInput,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="Ex.: 80,00"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
+              value={amount}
+              onChangeText={setAmount}
+            />
+
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>
+              Descrição
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="Descrição"
+              placeholderTextColor={colors.textMuted}
+              value={description}
+              onChangeText={setDescription}
+            />
+          </View>
+
+          <View
+            style={[
+              styles.sectionCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Situação da dívida
+            </Text>
+
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>
+              Status
+            </Text>
+            <View style={styles.segmentRowWrap}>
+              {(['pending', 'received', 'paid'] as DebtStatus[]).map((item) => {
+                const active = status === item;
+
+                return (
+                  <TouchableOpacity
+                    key={item}
+                    style={[
+                      styles.pillButton,
+                      {
+                        backgroundColor: active
+                          ? colors.primary
+                          : colors.surfaceSecondary,
+                      },
+                    ]}
+                    onPress={() => setStatus(item)}
+                  >
+                    <Text
+                      style={[
+                        styles.pillButtonText,
+                        {
+                          color: active ? '#FFFFFF' : colors.text,
+                        },
+                      ]}
+                    >
+                      {getStatusLabel(item)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>
+              Vencimento
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.inputButton,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                },
+              ]}
+              onPress={() => setShowDueDatePicker(true)}
+            >
+              <Text style={{ color: colors.text }}>
+                {dueDate
+                  ? formatDateBR(dueDate)
+                  : 'Selecionar data (opcional)'}
+              </Text>
+            </TouchableOpacity>
+
+            {showDueDatePicker && (
+              <DateTimePicker
+                value={dueDate ?? new Date()}
+                mode="date"
+                display="default"
+                onChange={handleDueDateChange}
+              />
+            )}
+          </View>
 
           <TouchableOpacity
             style={[
@@ -351,7 +500,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 28,
+    paddingBottom: 32,
   },
   centered: {
     flex: 1,
@@ -362,11 +511,66 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
+  heroCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
     marginTop: 12,
     marginBottom: 16,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  typeBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  typeBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  previewCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+  },
+  previewLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  previewValue: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  previewMeta: {
+    fontSize: 13,
+    marginTop: 6,
+  },
+  sectionCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 12,
   },
   fieldLabel: {
     fontSize: 14,
@@ -382,6 +586,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontSize: 15,
   },
+  highlightInput: {
+    borderWidth: 1.5,
+  },
   inputButton: {
     borderWidth: 1,
     borderRadius: 14,
@@ -389,23 +596,39 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     marginBottom: 12,
   },
+  segmentRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  segmentRowWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
   segmentButton: {
+    flex: 1,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  segmentButtonSpacing: {
-    marginBottom: 12,
   },
   segmentButtonText: {
     fontWeight: '700',
   },
+  pillButton: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  pillButtonText: {
+    fontWeight: '600',
+  },
   saveButton: {
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: 16,
+    paddingVertical: 15,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 4,
   },
   saveButtonText: {
     color: '#FFFFFF',

@@ -129,3 +129,50 @@ export type ParseMessageResponse =
       ambiguities: string[];
       parsed?: ParsedTransaction;
     };
+
+export type SupportCategory =
+  | 'bug'
+  | 'suggestion'
+  | 'question'
+  | 'improvement';
+
+export type SupportPayload = {
+  category: SupportCategory;
+  subject: string;
+  message: string;
+  appVersion?: string | null;
+  platform?: string | null;
+  deviceModel?: string | null;
+  osVersion?: string | null;
+  attachmentBase64?: string | null;
+  attachmentMimeType?: string | null;
+  attachmentFileName?: string | null;
+};
+
+export type SupportTicket = {
+  id: number;
+  category: SupportCategory | string;
+  subject: string;
+  message: string;
+  appVersion: string | null;
+  platform: string | null;
+  deviceModel: string | null;
+  osVersion: string | null;
+  attachmentBase64: string | null;
+  attachmentMimeType: string | null;
+  attachmentFileName: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  userId: number;
+};
+
+export type SupportResponse = {
+  message: string;
+  ticket: SupportTicket;
+  emailNotification?: {
+    sent: boolean;
+    skipped: boolean;
+    reason?: string;
+  };
+};

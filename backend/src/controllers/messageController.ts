@@ -110,11 +110,11 @@ class MessageController {
         });
       }
 
-      const safePossibleTransfer = inferPossibleTransferFromMessage(message);
+      const inferredPossibleTransfer = inferPossibleTransferFromMessage(message);
 
       const parsedNormalized = {
         ...parsed,
-        possibleTransfer: safePossibleTransfer,
+        possibleTransfer: parsed.possibleTransfer || inferredPossibleTransfer,
       };
 
       const resolvedDate = resolveRelativeDate(

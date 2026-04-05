@@ -187,7 +187,6 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [closingMonth, setClosingMonth] = useState(false);
   const [reopeningMonth, setReopeningMonth] = useState(false);
-
   const [categoryChartView, setCategoryChartView] =
     useState<CategoryChartView>('bars');
 
@@ -263,10 +262,6 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     loadDashboard(true);
-  }, []);
-
-  useEffect(() => {
-    loadDashboard(false);
   }, [period.startDate, period.endDate]);
 
   useFocusEffect(
@@ -315,8 +310,7 @@ export default function DashboardScreen() {
       console.error(error);
 
       const apiMessage =
-        error?.response?.data?.message ??
-        'Não foi possível fechar o mês.';
+        error?.response?.data?.message ?? 'Não foi possível fechar o mês.';
 
       Alert.alert('Erro', apiMessage);
     } finally {
@@ -332,10 +326,7 @@ export default function DashboardScreen() {
       )}? Isso criará um snapshot do período.`,
       [
         { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Fechar mês',
-          onPress: performCloseMonth,
-        },
+        { text: 'Fechar mês', onPress: performCloseMonth },
       ]
     );
   }
@@ -354,8 +345,7 @@ export default function DashboardScreen() {
       console.error(error);
 
       const apiMessage =
-        error?.response?.data?.message ??
-        'Não foi possível reabrir o mês.';
+        error?.response?.data?.message ?? 'Não foi possível reabrir o mês.';
 
       Alert.alert('Erro', apiMessage);
     } finally {
@@ -371,10 +361,7 @@ export default function DashboardScreen() {
       )}? O snapshot de fechamento será removido.`,
       [
         { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Reabrir mês',
-          onPress: performReopenMonth,
-        },
+        { text: 'Reabrir mês', onPress: performReopenMonth },
       ]
     );
   }
@@ -383,10 +370,22 @@ export default function DashboardScreen() {
     return formatCurrencyBRL(value);
   }
 
-  const maxCategoryTotal = useMemo(() => {
-    if (categories.length === 0) return 0;
-    return Math.max(...categories.map((item) => item.total));
+  function getTrendColor(
+    tone: 'positive' | 'negative' | 'neutral' | undefined
+  ) {
+    if (tone === 'positive') return colors.success;
+    if (tone === 'negative') return colors.danger;
+    return colors.textMuted;
+  }
+
+  const sortedCategories = useMemo(() => {
+    return [...categories].sort((a, b) => b.total - a.total);
   }, [categories]);
+
+  const maxCategoryTotal = useMemo(() => {
+    if (sortedCategories.length === 0) return 0;
+    return Math.max(...sortedCategories.map((item) => item.total));
+  }, [sortedCategories]);
 
   const currentClosure = useMemo(() => {
     const month = selectedMonth.getMonth() + 1;
@@ -398,29 +397,32 @@ export default function DashboardScreen() {
     );
   }, [closures, selectedMonth]);
 
-  const meaningfulDailySummary = useMemo(
-    () => dailySummary.filter((item) => item.totalTransactions > 0),
-    [dailySummary]
-  );
+  const meaningfulDailySummary = useMemo(() => {
+    return dailySummary.filter((item) => item.totalTransactions > 0);
+  }, [dailySummary]);
 
   const topCategory = useMemo(() => {
-    if (!categories.length) return null;
+    if (!sortedCategories.length) return null;
+    return sortedCategories[0];
+  }, [sortedCategories]);
 
-    return categories.reduce((top, current) =>
-      current.total > top.total ? current : top
-    );
-  }, [categories]);
-
-  const categoriesTotal = useMemo(
-    () => categories.reduce((sum, item) => sum + item.total, 0),
-    [categories]
-  );
+  const categoriesTotal = useMemo(() => {
+    return sortedCategories.reduce((sum, item) => sum + item.total, 0);
+  }, [sortedCategories]);
 
   const biggestExpenseDay = useMemo(() => {
     if (!meaningfulDailySummary.length) return null;
 
     return meaningfulDailySummary.reduce((top, current) =>
       current.totalExpenses > top.totalExpenses ? current : top
+    );
+  }, [meaningfulDailySummary]);
+
+  const bestIncomeDay = useMemo(() => {
+    if (!meaningfulDailySummary.length) return null;
+
+    return meaningfulDailySummary.reduce((top, current) =>
+      current.totalIncomes > top.totalIncomes ? current : top
     );
   }, [meaningfulDailySummary]);
 
@@ -450,6 +452,20 @@ export default function DashboardScreen() {
     return 'Seu saldo ficou estável em relação ao mês anterior.';
   }, [comparison]);
 
+  const spendingDirectionText = useMemo(() => {
+    if (!comparison) return null;
+
+    if (comparison.diff.totalExpenses > 0) {
+      return 'Suas despesas aumentaram no comparativo mensal.';
+    }
+
+    if (comparison.diff.totalExpenses < 0) {
+      return 'Suas despesas diminuíram no comparativo mensal.';
+    }
+
+    return 'Suas despesas ficaram estáveis em relação ao mês anterior.';
+  }, [comparison]);
+
   const incomeTrend = comparison
     ? getTrendIndicator(comparison.diff.totalIncomes, 'income')
     : null;
@@ -463,22 +479,22 @@ export default function DashboardScreen() {
     ? getTrendIndicator(comparison.diff.totalTransactions, 'transactions')
     : null;
 
-  function getTrendColor(
-    tone: 'positive' | 'negative' | 'neutral' | undefined
-  ) {
-    if (tone === 'positive') return colors.success;
-    if (tone === 'negative') return colors.danger;
-    return colors.textMuted;
-  }
-
   const balancePercentChange = useMemo(() => {
     if (!comparison) return null;
 
     const previous = comparison.previous.balance;
-
     if (previous === 0) return null;
 
     return (comparison.diff.balance / Math.abs(previous)) * 100;
+  }, [comparison]);
+
+  const expensePercentChange = useMemo(() => {
+    if (!comparison) return null;
+
+    const previous = comparison.previous.totalExpenses;
+    if (previous === 0) return null;
+
+    return (comparison.diff.totalExpenses / Math.abs(previous)) * 100;
   }, [comparison]);
 
   if (loading) {
@@ -579,10 +595,7 @@ export default function DashboardScreen() {
               disabled={reopeningMonth}
             >
               <Text
-                style={[
-                  styles.closeMonthButtonText,
-                  { color: colors.text },
-                ]}
+                style={[styles.closeMonthButtonText, { color: colors.text }]}
               >
                 {reopeningMonth ? 'Reabrindo...' : 'Reabrir mês'}
               </Text>
@@ -598,10 +611,7 @@ export default function DashboardScreen() {
               disabled={closingMonth}
             >
               <Text
-                style={[
-                  styles.closeMonthButtonText,
-                  { color: '#FFFFFF' },
-                ]}
+                style={[styles.closeMonthButtonText, { color: '#FFFFFF' }]}
               >
                 {closingMonth ? 'Fechando...' : 'Fechar mês'}
               </Text>
@@ -749,13 +759,17 @@ export default function DashboardScreen() {
               ]}
             >
               <Text style={[styles.insightLabel, { color: colors.textMuted }]}>
-                Total movimentado
+                Melhor dia de entrada
               </Text>
               <Text style={[styles.insightValue, { color: colors.text }]}>
-                {formatCurrency(totalMoved)}
+                {bestIncomeDay
+                  ? formatDateBR(`${bestIncomeDay.date}T00:00:00`)
+                  : 'Sem dados'}
               </Text>
               <Text style={[styles.insightMeta, { color: colors.textMuted }]}>
-                Soma de receitas e despesas
+                {bestIncomeDay
+                  ? formatCurrency(bestIncomeDay.totalIncomes)
+                  : 'Nenhuma receita registrada'}
               </Text>
             </View>
 
@@ -784,7 +798,7 @@ export default function DashboardScreen() {
             style={[
               styles.highlightInsightBox,
               {
-                backgroundColor: colors.primarySoft ?? colors.surfaceSecondary,
+                backgroundColor: colors.surfaceSecondary,
                 borderColor: colors.border,
               },
             ]}
@@ -814,6 +828,42 @@ export default function DashboardScreen() {
               </Text>
             )}
           </View>
+
+          <View
+            style={[
+              styles.highlightInsightBox,
+              {
+                backgroundColor: colors.surfaceSecondary,
+                borderColor: colors.border,
+                marginTop: 12,
+              },
+            ]}
+          >
+            <Text style={[styles.highlightInsightTitle, { color: colors.text }]}>
+              Ritmo de gastos
+            </Text>
+            <Text
+              style={[styles.highlightInsightText, { color: colors.textMuted }]}
+            >
+              {spendingDirectionText ??
+                'Ainda não há dados suficientes para gerar insight sobre despesas.'}
+            </Text>
+
+            {expensePercentChange !== null && (
+              <Text
+                style={[
+                  styles.highlightInsightPercent,
+                  {
+                    color:
+                      expensePercentChange <= 0 ? colors.success : colors.danger,
+                  },
+                ]}
+              >
+                {expensePercentChange > 0 ? '↑' : '↓'}{' '}
+                {Math.abs(expensePercentChange).toFixed(1)}% nas despesas
+              </Text>
+            )}
+          </View>
         </View>
 
         <View
@@ -831,18 +881,32 @@ export default function DashboardScreen() {
 
           {comparison ? (
             <>
-              <Text style={[styles.comparisonSubtitle, { color: colors.textMuted }]}>
-                Atual: {formatClosureLabel(comparison.current.month, comparison.current.year)}
+              <Text
+                style={[styles.comparisonSubtitle, { color: colors.textMuted }]}
+              >
+                Atual:{' '}
+                {formatClosureLabel(
+                  comparison.current.month,
+                  comparison.current.year
+                )}
               </Text>
-              <Text style={[styles.comparisonSubtitle, { color: colors.textMuted }]}>
-                Anterior: {formatClosureLabel(comparison.previous.month, comparison.previous.year)}
+              <Text
+                style={[styles.comparisonSubtitle, { color: colors.textMuted }]}
+              >
+                Anterior:{' '}
+                {formatClosureLabel(
+                  comparison.previous.month,
+                  comparison.previous.year
+                )}
               </Text>
 
               <View style={styles.comparisonRow}>
                 <Text style={[styles.comparisonLabel, { color: colors.text }]}>
                   Receitas
                 </Text>
-                <Text style={[styles.comparisonCurrent, { color: colors.text }]}>
+                <Text
+                  style={[styles.comparisonCurrent, { color: colors.text }]}
+                >
                   {formatCurrency(comparison.current.totalIncomes)}
                 </Text>
                 <Text
@@ -851,7 +915,8 @@ export default function DashboardScreen() {
                     { color: getTrendColor(incomeTrend?.tone) },
                   ]}
                 >
-                  {incomeTrend?.arrow} {formatDiffCurrency(comparison.diff.totalIncomes)}
+                  {incomeTrend?.arrow}{' '}
+                  {formatDiffCurrency(comparison.diff.totalIncomes)}
                 </Text>
               </View>
 
@@ -859,7 +924,9 @@ export default function DashboardScreen() {
                 <Text style={[styles.comparisonLabel, { color: colors.text }]}>
                   Despesas
                 </Text>
-                <Text style={[styles.comparisonCurrent, { color: colors.text }]}>
+                <Text
+                  style={[styles.comparisonCurrent, { color: colors.text }]}
+                >
                   {formatCurrency(comparison.current.totalExpenses)}
                 </Text>
                 <Text
@@ -868,7 +935,8 @@ export default function DashboardScreen() {
                     { color: getTrendColor(expenseTrend?.tone) },
                   ]}
                 >
-                  {expenseTrend?.arrow} {formatDiffCurrency(comparison.diff.totalExpenses)}
+                  {expenseTrend?.arrow}{' '}
+                  {formatDiffCurrency(comparison.diff.totalExpenses)}
                 </Text>
               </View>
 
@@ -876,7 +944,9 @@ export default function DashboardScreen() {
                 <Text style={[styles.comparisonLabel, { color: colors.text }]}>
                   Saldo
                 </Text>
-                <Text style={[styles.comparisonCurrent, { color: colors.text }]}>
+                <Text
+                  style={[styles.comparisonCurrent, { color: colors.text }]}
+                >
                   {formatCurrency(comparison.current.balance)}
                 </Text>
                 <Text
@@ -885,7 +955,8 @@ export default function DashboardScreen() {
                     { color: getTrendColor(balanceTrend?.tone) },
                   ]}
                 >
-                  {balanceTrend?.arrow} {formatDiffCurrency(comparison.diff.balance)}
+                  {balanceTrend?.arrow}{' '}
+                  {formatDiffCurrency(comparison.diff.balance)}
                 </Text>
               </View>
 
@@ -893,7 +964,9 @@ export default function DashboardScreen() {
                 <Text style={[styles.comparisonLabel, { color: colors.text }]}>
                   Transações
                 </Text>
-                <Text style={[styles.comparisonCurrent, { color: colors.text }]}>
+                <Text
+                  style={[styles.comparisonCurrent, { color: colors.text }]}
+                >
                   {comparison.current.totalTransactions}
                 </Text>
                 <Text
@@ -902,7 +975,8 @@ export default function DashboardScreen() {
                     { color: getTrendColor(transactionsTrend?.tone) },
                   ]}
                 >
-                  {transactionsTrend?.arrow} {formatDiffNumber(comparison.diff.totalTransactions)}
+                  {transactionsTrend?.arrow}{' '}
+                  {formatDiffNumber(comparison.diff.totalTransactions)}
                 </Text>
               </View>
             </>
@@ -947,7 +1021,10 @@ export default function DashboardScreen() {
                     {formatDateBR(`${item.date}T00:00:00`)}
                   </Text>
                   <Text
-                    style={[styles.dailyTransactions, { color: colors.textMuted }]}
+                    style={[
+                      styles.dailyTransactions,
+                      { color: colors.textMuted },
+                    ]}
                   >
                     {item.totalTransactions} transação(ões)
                   </Text>
@@ -985,13 +1062,14 @@ export default function DashboardScreen() {
           ]}
         >
           <View style={styles.sectionHeaderRow}>
-            <View style={{ flex: 1 }}>
+            <View style={styles.sectionHeaderText}>
               <Text style={[styles.sectionTitleNoMargin, { color: colors.text }]}>
                 Gastos por categoria
               </Text>
               {topCategory && (
                 <Text style={[styles.topCategoryText, { color: colors.textMuted }]}>
-                  Maior gasto: {topCategory.category} — {formatCurrency(topCategory.total)}
+                  Maior gasto: {topCategory.category} —{' '}
+                  {formatCurrency(topCategory.total)}
                 </Text>
               )}
             </View>
@@ -1051,12 +1129,12 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {categories.length === 0 ? (
+          {sortedCategories.length === 0 ? (
             <Text style={[styles.emptyText, { color: colors.textMuted }]}>
               Não há despesas nesse período para exibir no dashboard.
             </Text>
           ) : categoryChartView === 'bars' ? (
-            categories.map((item, index) => {
+            sortedCategories.map((item, index) => {
               const widthPercent =
                 maxCategoryTotal > 0 ? (item.total / maxCategoryTotal) * 100 : 0;
 
@@ -1087,7 +1165,7 @@ export default function DashboardScreen() {
                   <View
                     style={[
                       styles.categoryBarTrack,
-                      { backgroundColor: colors.surfaceSecondary },
+                      { backgroundColor: colors.overlay },
                     ]}
                   >
                     <View
@@ -1101,30 +1179,50 @@ export default function DashboardScreen() {
                     />
                   </View>
 
-                  <Text
-                    style={[styles.categoryCount, { color: colors.textMuted }]}
-                  >
-                    {item.count} transação(ões)
-                  </Text>
+                  <View style={styles.categoryFooter}>
+                    <Text
+                      style={[styles.categoryCount, { color: colors.textMuted }]}
+                    >
+                      {item.count} transação(ões)
+                    </Text>
+                    <Text
+                      style={[
+                        styles.categoryPercentage,
+                        { color: colors.textMuted },
+                      ]}
+                    >
+                      {categoriesTotal > 0
+                        ? ((item.total / categoriesTotal) * 100).toFixed(1)
+                        : '0.0'}
+                      %
+                    </Text>
+                  </View>
                 </View>
               );
             })
           ) : (
             <>
               <View style={styles.donutWrapper}>
-                <DonutChart data={categories} />
+                <DonutChart data={sortedCategories} />
                 <View style={styles.donutCenter}>
-                  <Text style={[styles.donutCenterLabel, { color: colors.textMuted }]}>
+                  <Text
+                    style={[
+                      styles.donutCenterLabel,
+                      { color: colors.textMuted },
+                    ]}
+                  >
                     Total
                   </Text>
-                  <Text style={[styles.donutCenterValue, { color: colors.text }]}>
+                  <Text
+                    style={[styles.donutCenterValue, { color: colors.text }]}
+                  >
                     {formatCurrency(categoriesTotal)}
                   </Text>
                 </View>
               </View>
 
               <View style={styles.legendContainer}>
-                {categories.map((item, index) => {
+                {sortedCategories.map((item, index) => {
                   const percentage =
                     categoriesTotal > 0 ? (item.total / categoriesTotal) * 100 : 0;
 
@@ -1143,11 +1241,16 @@ export default function DashboardScreen() {
                       </View>
 
                       <View style={styles.legendRight}>
-                        <Text style={[styles.legendValue, { color: colors.text }]}>
+                        <Text
+                          style={[styles.legendValue, { color: colors.text }]}
+                        >
                           {formatCurrency(item.total)}
                         </Text>
                         <Text
-                          style={[styles.legendPercentage, { color: colors.textMuted }]}
+                          style={[
+                            styles.legendPercentage,
+                            { color: colors.textMuted },
+                          ]}
                         >
                           {percentage.toFixed(1)}%
                         </Text>
@@ -1235,7 +1338,7 @@ const styles = StyleSheet.create({
   },
   periodCard: {
     padding: 16,
-    borderRadius: 18,
+    borderRadius: 20,
     marginTop: 12,
     marginBottom: 16,
     borderWidth: 1,
@@ -1298,14 +1401,15 @@ const styles = StyleSheet.create({
   cardsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
     marginBottom: 16,
   },
   metricCard: {
-    width: '48%',
+    width: '48.5%',
     borderWidth: 1,
     borderRadius: 18,
     padding: 16,
+    marginBottom: 12,
   },
   metricLabel: {
     fontSize: 13,
@@ -1318,7 +1422,7 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     borderWidth: 1,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 16,
     marginBottom: 16,
   },
@@ -1337,21 +1441,26 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 14,
   },
+  sectionHeaderText: {
+    flex: 1,
+  },
   topCategoryText: {
     marginTop: 4,
     fontSize: 13,
+    lineHeight: 18,
   },
   insightsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
     marginBottom: 16,
   },
   insightCard: {
-    width: '48%',
+    width: '48.5%',
     borderWidth: 1,
     borderRadius: 18,
     padding: 14,
+    marginBottom: 12,
   },
   insightLabel: {
     fontSize: 13,
@@ -1494,9 +1603,18 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 999,
   },
+  categoryFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 6,
+  },
   categoryCount: {
     fontSize: 12,
-    marginTop: 6,
+  },
+  categoryPercentage: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   donutWrapper: {
     alignItems: 'center',

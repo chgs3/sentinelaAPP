@@ -4,8 +4,29 @@ function normalizeText(value: string | null | undefined) {
   return (value ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
     .toLowerCase()
     .trim();
+}
+
+function hasAny(text: string, items: string[]) {
+  return items.some((item) => text.includes(item));
+}
+
+function isShortButClearMessage(normalizedMessage: string) {
+  return hasAny(normalizedMessage, [
+    'uber',
+    '99',
+    'ifood',
+    'mercado',
+    'farmacia',
+    'farmácia',
+    'salario',
+    'salário',
+    'freela',
+    'gasolina',
+    'aluguel',
+  ]);
 }
 
 export function detectParseAmbiguities(
@@ -42,9 +63,12 @@ export function detectParseAmbiguities(
     'gasto',
     'recebimento',
     'transferencia',
+    'transferência',
     'pix',
     'debito',
+    'débito',
     'credito',
+    'crédito',
     'dinheiro',
   ];
 
@@ -59,20 +83,21 @@ export function detectParseAmbiguities(
   const transferKeywords = [
     'transferi',
     'transferencia',
+    'transferência',
     'passei',
     'mandei',
     'enviei',
-    'pro inter',
-    'pro nubank',
-    'para o inter',
-    'para o nubank',
+    'entre contas',
+    'minha outra conta',
+    'para minha conta',
+    'pra minha conta',
   ];
 
-  const hasTransferSignal = transferKeywords.some((keyword) =>
+  const hasStrongTransferSignal = transferKeywords.some((keyword) =>
     normalizedMessage.includes(keyword)
   );
 
-  if (parsed.possibleTransfer === true || hasTransferSignal) {
+  if (parsed.possibleTransfer === true && hasStrongTransferSignal) {
     ambiguities.push('Mensagem pode representar transferência interna.');
   }
 
@@ -99,29 +124,34 @@ export function detectParseAmbiguities(
     ambiguities.push('Expressão temporal potencialmente ambígua.');
   }
 
-  if (normalizedMessage.split(/\s+/).filter(Boolean).length <= 2) {
-    ambiguities.push('Mensagem curta demais para interpretação segura.');
+  const wordCount = normalizedMessage.split(/\s+/).filter(Boolean).length;
+
+  if (wordCount <= 2 && !isShortButClearMessage(normalizedMessage)) {
+    ambiguities.push('Mensagem curta demais para interpretação totalmente segura.');
   }
 
-  const ambiguousMoneyPatterns = ['pix', 'joao', 'mae', 'pai', 'mãe'];
-
-  const hasAmbiguousMoneyPattern = ambiguousMoneyPatterns.some((pattern) =>
-    normalizedMessage.includes(pattern)
-  );
-
   const weakExpenseOrIncomeVerb =
-    !normalizedMessage.includes('gastei') &&
-    !normalizedMessage.includes('paguei') &&
-    !normalizedMessage.includes('recebi') &&
-    !normalizedMessage.includes('ganhei');
+    !hasAny(normalizedMessage, [
+      'gastei',
+      'paguei',
+      'recebi',
+      'ganhei',
+      'entrou',
+      'caiu',
+      'comprei',
+    ]);
 
-  if (hasAmbiguousMoneyPattern && weakExpenseOrIncomeVerb) {
+  if (
+    normalizedMessage.includes('pix') &&
+    weakExpenseOrIncomeVerb &&
+    !hasStrongTransferSignal
+  ) {
     ambiguities.push('Mensagem ambígua quanto a receita ou despesa.');
   }
 
-  if (confidence < 0.6) {
+  if (confidence < 0.5) {
     ambiguities.push('Confiança baixa da IA.');
-  } else if (confidence < 0.85) {
+  } else if (confidence < 0.72) {
     ambiguities.push('Confiança intermediária da IA.');
   }
 
