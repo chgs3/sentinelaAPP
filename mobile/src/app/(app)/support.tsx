@@ -27,6 +27,8 @@ import type {
   SupportResponse,
 } from '../../types';
 
+const MAX_BASE64_LENGTH = 2_500_000;
+
 const categoryOptions: Array<{
   label: string;
   value: SupportCategory;
@@ -179,8 +181,9 @@ export default function SupportScreen() {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: false,
-        quality: 0.5,
+        allowsEditing: true,
+        aspect: [4, 4],
+        quality: 0.3,
         base64: true,
       });
 
@@ -225,6 +228,14 @@ export default function SupportScreen() {
   async function handleSubmit() {
     if (!subject.trim() || !message.trim()) {
       Alert.alert('Atenção', 'Preencha assunto e mensagem antes de enviar.');
+      return;
+    }
+
+    if (attachmentBase64 && attachmentBase64.length > MAX_BASE64_LENGTH) {
+      Alert.alert(
+        'Imagem muito grande', 
+        'O print selecionado excede o tamanho máximo permitido.'
+      );
       return;
     }
 
