@@ -34,6 +34,7 @@ const config: ExpoConfig = {
   },
 
   android: {
+    package: 'com.caiquedev.sentinela',
     adaptiveIcon: {
       backgroundColor: '#E6F4FE',
       foregroundImage: './assets/images/android-icon-foreground.png',
@@ -74,6 +75,9 @@ const config: ExpoConfig = {
   extra: {
     appEnv: APP_ENV,
     apiUrl: apiUrlByEnv[APP_ENV] ?? apiUrlByEnv.dev,
+    eas: {
+      projectId: '32a460de-c553-4ab2-a25a-c33ac9d79466',
+    },
   },
 };
 
