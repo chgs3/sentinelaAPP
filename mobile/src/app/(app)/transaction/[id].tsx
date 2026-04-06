@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api } from '../../../services/api';
@@ -66,9 +66,11 @@ export default function TransactionDetailsScreen() {
     }
   }
 
-  useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
     loadTransaction();
-  }, []);
+  }, [id]));
+
 
   function formatCurrency(value: number) {
     return formatCurrencyBRL(value);

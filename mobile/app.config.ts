@@ -4,7 +4,7 @@ const APP_ENV = process.env.APP_ENV ?? 'dev';
 
 const apiUrlByEnv: Record<string, string> = {
   dev: 'http://192.168.1.12:3333',
-  beta: 'https://api-beta.seudominio.com',
+  beta: 'https://sentinela-backend-beta.onrender.com',
   prod: 'https://api.seudominio.com',
 };
 
