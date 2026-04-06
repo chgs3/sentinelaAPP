@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const createSupportTicketSchema = z.object({
-  category: z.enum(['bug', 'suggestion', 'question', 'other'], {
+  category: z.enum(['bug', 'suggestion', 'question', 'improvement', 'other'], {
     message: 'Categoria inválida.',
   }),
 
