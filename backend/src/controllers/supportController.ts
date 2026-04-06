@@ -9,10 +9,22 @@ import supportNotificationService from '../services/supportNotificationService';
 
 class SupportController {
   async create(req: Request, res: Response) {
+    const startedAt = Date.now();
+
     try {
+      console.log('[SUPPORT] entrou no controller.create');
+      console.log('[SUPPORT] method/url:', req.method, req.originalUrl);
+      console.log('[SUPPORT] userId recebido do middleware:', req.userId);
+      console.log('[SUPPORT] body keys:', Object.keys(req.body || {}));
+      console.log(
+        '[SUPPORT] attachmentBase64 length:',
+        req.body?.attachmentBase64?.length ?? 0
+      );
+
       const userId = req.userId;
 
       if (!userId) {
+        console.warn('[SUPPORT] usuário não autenticado');
         return res.status(401).json({
           message: 'Usuário não autenticado.',
         });
@@ -21,10 +33,18 @@ class SupportController {
       const parsedBody = createSupportTicketSchema.safeParse(req.body);
 
       if (!parsedBody.success) {
+        console.warn('[SUPPORT] falha na validação do body');
+        console.warn('[SUPPORT] erro zod:', parsedBody.error.flatten());
         return res.status(400).json({
           message: getZodErrorMessage(parsedBody.error),
         });
       }
+
+      console.log(
+        '[SUPPORT] body validado com sucesso em',
+        Date.now() - startedAt,
+        'ms'
+      );
 
       const {
         category,
@@ -39,6 +59,14 @@ class SupportController {
         attachmentFileName,
       } = parsedBody.data;
 
+      console.log('[SUPPORT] categoria:', category);
+      console.log('[SUPPORT] subject length:', subject.length);
+      console.log('[SUPPORT] message length:', message.length);
+      console.log(
+        '[SUPPORT] attachment informado?',
+        Boolean(attachmentBase64)
+      );
+
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -48,11 +76,23 @@ class SupportController {
         },
       });
 
+      console.log(
+        '[SUPPORT] busca do usuário concluída em',
+        Date.now() - startedAt,
+        'ms'
+      );
+
       if (!user) {
+        console.warn('[SUPPORT] usuário não encontrado no banco:', userId);
         return res.status(404).json({
           message: 'Usuário não encontrado.',
         });
       }
+
+      console.log('[SUPPORT] usuário encontrado:', {
+        id: user.id,
+        email: user.email,
+      });
 
       const ticket = await prisma.supportTicket.create({
         data: {
@@ -71,6 +111,14 @@ class SupportController {
         },
       });
 
+      console.log(
+        '[SUPPORT] ticket criado com sucesso:',
+        ticket.id,
+        'em',
+        Date.now() - startedAt,
+        'ms'
+      );
+
       let emailNotification:
         | {
             sent: boolean;
@@ -80,6 +128,8 @@ class SupportController {
         | undefined;
 
       try {
+        console.log('[SUPPORT] iniciando envio de e-mail');
+
         emailNotification =
           await supportNotificationService.sendNewTicketNotification({
             ticketId: ticket.id,
@@ -97,8 +147,15 @@ class SupportController {
             attachmentFileName: ticket.attachmentFileName,
             createdAt: ticket.createdAt,
           });
+
+        console.log(
+          '[SUPPORT] envio de e-mail concluído em',
+          Date.now() - startedAt,
+          'ms',
+          emailNotification
+        );
       } catch (mailError) {
-        console.error('Erro ao enviar e-mail de suporte:', mailError);
+        console.error('[SUPPORT] erro ao enviar e-mail de suporte:', mailError);
         emailNotification = {
           sent: false,
           skipped: false,
@@ -106,13 +163,24 @@ class SupportController {
         };
       }
 
+      console.log(
+        '[SUPPORT] finalizando request com 201 em',
+        Date.now() - startedAt,
+        'ms'
+      );
+
       return res.status(201).json({
         message: 'Chamado de suporte criado com sucesso.',
         ticket,
         emailNotification,
       });
     } catch (error) {
-      console.error('Erro ao criar chamado de suporte:', error);
+      console.error('[SUPPORT] erro ao criar chamado de suporte:', error);
+      console.error(
+        '[SUPPORT] tempo até erro:',
+        Date.now() - startedAt,
+        'ms'
+      );
 
       return res.status(500).json({
         message: 'Erro ao criar chamado de suporte.',
@@ -122,6 +190,9 @@ class SupportController {
 
   async list(req: Request, res: Response) {
     try {
+      console.log('[SUPPORT] entrou no controller.list');
+      console.log('[SUPPORT] userId:', req.userId);
+
       const userId = req.userId;
 
       if (!userId) {
@@ -133,6 +204,7 @@ class SupportController {
       const parsedQuery = listSupportTicketsQuerySchema.safeParse(req.query);
 
       if (!parsedQuery.success) {
+        console.warn('[SUPPORT] falha na validação da query do list');
         return res.status(400).json({
           message: getZodErrorMessage(parsedQuery.error),
         });
@@ -150,6 +222,8 @@ class SupportController {
         },
       });
 
+      console.log('[SUPPORT] tickets listados:', tickets.length);
+
       return res.status(200).json(tickets);
     } catch (error) {
       console.error('Erro ao listar chamados de suporte:', error);
@@ -162,6 +236,9 @@ class SupportController {
 
   async getById(req: Request, res: Response) {
     try {
+      console.log('[SUPPORT] entrou no controller.getById');
+      console.log('[SUPPORT] userId:', req.userId, 'params.id:', req.params.id);
+
       const userId = req.userId;
       const { id } = req.params;
 
@@ -191,6 +268,8 @@ class SupportController {
           message: 'Chamado de suporte não encontrado.',
         });
       }
+
+      console.log('[SUPPORT] ticket encontrado:', ticket.id);
 
       return res.status(200).json(ticket);
     } catch (error) {
