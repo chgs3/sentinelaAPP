@@ -1,6 +1,7 @@
 import type {
   ParsedTransaction,
   PaymentMethod,
+  TransactionCategory,
   TransactionType,
 } from '../types/parsedTransaction';
 
@@ -234,7 +235,11 @@ function inferType(
     return { type: 'income', confidenceBoost: 0.2 };
   }
 
-  if (paymentMethod === 'credit' || paymentMethod === 'debit' || paymentMethod === 'cash') {
+  if (
+    paymentMethod === 'credit' ||
+    paymentMethod === 'debit' ||
+    paymentMethod === 'cash'
+  ) {
     return { type: 'expense', confidenceBoost: 0.12 };
   }
 
@@ -357,9 +362,7 @@ function inferDescription(
   possibleTransfer: boolean
 ): string {
   if (possibleTransfer) {
-    const targetMatch = raw.match(
-      /\b(?:pro|pra|para)\s+(.+)$/i
-    );
+    const targetMatch = raw.match(/\b(?:pro|pra|para)\s+(.+)$/i);
 
     const target = cleanupDescription(targetMatch?.[1]);
     if (target) {
@@ -424,12 +427,13 @@ function inferCategory(
   description: string,
   type: TransactionType,
   possibleTransfer: boolean
-): string {
+): TransactionCategory {
   if (possibleTransfer) return 'Transferência';
 
   const text = `${normalized} ${normalizeText(description)}`;
 
-  const includesAny = (items: string[]) => items.some((item) => text.includes(item));
+  const includesAny = (items: string[]) =>
+    items.some((item) => text.includes(item));
 
   if (
     includesAny([
@@ -579,7 +583,7 @@ function inferConfidence(params: {
   typeWasExplicit: boolean;
   paymentMethod: PaymentMethod;
   accountOrCard: string | null;
-  category: string;
+  category: TransactionCategory;
   description: string;
   possibleTransfer: boolean;
   rawDateExpression: string | null;

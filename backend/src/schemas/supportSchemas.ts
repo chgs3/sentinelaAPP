@@ -1,42 +1,61 @@
 import { z } from 'zod';
 
 export const createSupportTicketSchema = z.object({
-  category: z.enum(['bug', 'suggestion', 'question', 'improvement'], {
+  category: z.enum(['bug', 'suggestion', 'question', 'other'], {
     message: 'Categoria inválida.',
   }),
 
   subject: z
-    .string({
-      required_error: 'Assunto é obrigatório.',
-    })
+    .string()
     .trim()
     .min(3, 'Assunto deve ter pelo menos 3 caracteres.')
     .max(120, 'Assunto deve ter no máximo 120 caracteres.'),
 
   message: z
-    .string({
-      required_error: 'Mensagem é obrigatória.',
-    })
+    .string()
     .trim()
     .min(10, 'Mensagem deve ter pelo menos 10 caracteres.')
     .max(5000, 'Mensagem deve ter no máximo 5000 caracteres.'),
 
-  appVersion: z.string().trim().max(50).optional().nullable(),
-  platform: z.string().trim().max(30).optional().nullable(),
-  deviceModel: z.string().trim().max(100).optional().nullable(),
-  osVersion: z.string().trim().max(50).optional().nullable(),
+  appVersion: z
+    .string()
+    .trim()
+    .max(50, 'Versão do app muito longa.')
+    .optional()
+    .nullable(),
+
+  platform: z
+    .string()
+    .trim()
+    .max(30, 'Plataforma muito longa.')
+    .optional()
+    .nullable(),
+
+  deviceModel: z
+    .string()
+    .trim()
+    .max(100, 'Modelo do dispositivo muito longo.')
+    .optional()
+    .nullable(),
+
+  osVersion: z
+    .string()
+    .trim()
+    .max(50, 'Versão do sistema muito longa.')
+    .optional()
+    .nullable(),
 
   attachmentBase64: z
     .string()
     .trim()
-    .max(8_000_000, 'Imagem muito grande para envio.')
+    .max(10_000_000, 'Imagem muito grande.')
     .optional()
     .nullable(),
 
   attachmentMimeType: z
     .string()
     .trim()
-    .max(100, 'Tipo do arquivo inválido.')
+    .max(100, 'Tipo MIME muito longo.')
     .optional()
     .nullable(),
 
@@ -49,5 +68,7 @@ export const createSupportTicketSchema = z.object({
 });
 
 export const listSupportTicketsQuerySchema = z.object({
-  status: z.enum(['open', 'in_progress', 'resolved']).optional(),
+  status: z.enum(['open', 'in_progress', 'resolved'], {
+    message: 'Status inválido.',
+  }).optional(),
 });
