@@ -4,3 +4,4 @@ dist/
 src/generated/prisma
 prisma/dev.db
 prisma/dev.db-journal
+scripts/export-single-support-image.ts
