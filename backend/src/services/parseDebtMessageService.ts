@@ -97,8 +97,13 @@ function splitPersonAndDescription(
 
   const leftTokens = left.split(/\s+/).filter(Boolean);
   const rightTokens = right.split(/\s+/).filter(Boolean);
+  const firstRightToken = rightTokens[0];
 
-  if (leftTokens.length === 1 && rightTokens.length >= 1 && looksLikePurposeWord(rightTokens[0])) {
+  if (
+    leftTokens.length === 1 &&
+    firstRightToken &&
+    looksLikePurposeWord(firstRightToken)
+  ) {
     return {
       personName: left,
       description: right,
@@ -118,7 +123,7 @@ function splitPersonAndDescription(
   };
 }
 
-function extractTrailingDescription(value: string) {
+function extractTrailingDescription(value?: string) {
   const cleaned = cleanupDescription(value);
   return cleaned || 'Dívida registrada';
 }
