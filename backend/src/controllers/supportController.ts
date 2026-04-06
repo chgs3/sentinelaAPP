@@ -119,49 +119,22 @@ class SupportController {
         'ms'
       );
 
-      let emailNotification:
-        | {
-            sent: boolean;
-            skipped: boolean;
-            reason?: string;
-          }
-        | undefined;
-
-      try {
-        console.log('[SUPPORT] iniciando envio de e-mail');
-
-        emailNotification =
-          await supportNotificationService.sendNewTicketNotification({
-            ticketId: ticket.id,
-            userName: user.name,
-            userEmail: user.email,
-            category: ticket.category,
-            subject: ticket.subject,
-            message: ticket.message,
-            appVersion: ticket.appVersion,
-            platform: ticket.platform,
-            deviceModel: ticket.deviceModel,
-            osVersion: ticket.osVersion,
-            attachmentBase64: ticket.attachmentBase64,
-            attachmentMimeType: ticket.attachmentMimeType,
-            attachmentFileName: ticket.attachmentFileName,
-            createdAt: ticket.createdAt,
-          });
-
-        console.log(
-          '[SUPPORT] envio de e-mail concluído em',
-          Date.now() - startedAt,
-          'ms',
-          emailNotification
-        );
-      } catch (mailError) {
-        console.error('[SUPPORT] erro ao enviar e-mail de suporte:', mailError);
-        emailNotification = {
-          sent: false,
-          skipped: false,
-          reason: 'mail_send_failed',
-        };
-      }
+      const emailPayload = {
+        ticketId: ticket.id,
+        userName: user.name,
+        userEmail: user.email,
+        category: ticket.category,
+        subject: ticket.subject,
+        message: ticket.message,
+        appVersion: ticket.appVersion,
+        platform: ticket.platform,
+        deviceModel: ticket.deviceModel,
+        osVersion: ticket.osVersion,
+        attachmentBase64: ticket.attachmentBase64,
+        attachmentMimeType: ticket.attachmentMimeType,
+        attachmentFileName: ticket.attachmentFileName,
+        createdAt: ticket.createdAt,
+      };
 
       console.log(
         '[SUPPORT] finalizando request com 201 em',
@@ -169,11 +142,38 @@ class SupportController {
         'ms'
       );
 
-      return res.status(201).json({
+      res.status(201).json({
         message: 'Chamado de suporte criado com sucesso.',
         ticket,
-        emailNotification,
+        emailNotification: {
+          sent: false,
+          skipped: false,
+          reason: 'processing_async',
+        },
       });
+
+      void supportNotificationService
+        .sendNewTicketNotification(emailPayload)
+        .then((result) => {
+          console.log(
+            '[SUPPORT] envio assíncrono de e-mail concluído para ticket:',
+            ticket.id,
+            result
+          );
+        })
+        .catch((mailError: any) => {
+          console.error('[SUPPORT] erro no envio assíncrono de e-mail:', {
+            ticketId: ticket.id,
+            message: mailError?.message,
+            code: mailError?.code,
+            command: mailError?.command,
+            response: mailError?.response,
+            responseCode: mailError?.responseCode,
+            stack: mailError?.stack,
+          });
+        });
+
+      return;
     } catch (error) {
       console.error('[SUPPORT] erro ao criar chamado de suporte:', error);
       console.error(

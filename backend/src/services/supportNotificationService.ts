@@ -119,6 +119,9 @@ class SupportNotificationService {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
   }
 
@@ -137,6 +140,8 @@ class SupportNotificationService {
 
     const transporter = this.createTransporter();
 
+    await transporter.verify();
+
     const attachments = data.attachmentBase64
       ? [
           {
@@ -150,9 +155,7 @@ class SupportNotificationService {
       : [];
 
     await transporter.sendMail({
-      from:
-        process.env.MAIL_FROM ||
-        `"${process.env.APP_NAME || 'Sentinela'}" <${process.env.SMTP_USER}>`,
+      from: process.env.SMTP_USER,
       to: process.env.SUPPORT_EMAIL,
       replyTo: data.userEmail,
       subject: `[${process.env.APP_NAME || 'Sentinela'}][Suporte] #${data.ticketId} - ${data.subject}`,
