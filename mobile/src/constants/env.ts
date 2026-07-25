@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { resolveMobileEnvironment } from '../../config/environment.js';
 
 type ExpoExtra = {
   apiUrl?: string;
@@ -6,8 +7,12 @@ type ExpoExtra = {
 };
 
 const extra = (Constants.expoConfig?.extra ?? {}) as ExpoExtra;
+const environment = resolveMobileEnvironment({
+  APP_ENV: extra.appEnv,
+  EXPO_PUBLIC_API_URL: extra.apiUrl,
+});
 
 export const ENV = {
-  appEnv: extra.appEnv ?? 'dev',
-  apiUrl: extra.apiUrl ?? 'http://192.168.1.12:3333',
+  appEnv: environment.appEnv,
+  apiUrl: environment.apiUrl,
 };

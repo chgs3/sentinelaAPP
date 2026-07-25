@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import { env } from '../config/env';
 
 type TokenPayload = {
   userId: number;
@@ -42,17 +43,7 @@ export default function authMiddleware(
       });
     }
 
-    if (!process.env.JWT_SECRET) {
-      console.error('[AUTH] JWT_SECRET não definido');
-      return res.status(500).json({
-        message: 'Erro interno de autenticação.',
-      });
-    }
-
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET
-    ) as TokenPayload;
+    const decoded = jwt.verify(token, env.JWT_SECRET) as TokenPayload;
 
     console.log('[AUTH] token decodificado com sucesso');
     console.log('[AUTH] userId extraído:', decoded.userId);

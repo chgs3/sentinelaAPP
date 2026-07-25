@@ -3,13 +3,18 @@ import {
   aiTransactionSchema,
   type AITransactionOutput,
 } from '../schemas/aiTransactionSchema';
+import { env } from '../config/env';
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY!,
-});
+const ai = env.GEMINI_API_KEY
+  ? new GoogleGenAI({ apiKey: env.GEMINI_API_KEY })
+  : null;
 
 class AIParseTransactionMessageService {
   async execute(message: string): Promise<AITransactionOutput | null> {
+    if (!ai) {
+      return null;
+    }
+
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
 

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { env } from '../config/env';
 
 type SupportNotificationInput = {
   ticketId: number;
@@ -17,14 +18,25 @@ type SupportNotificationInput = {
   createdAt: Date;
 };
 
-function isMailConfigured() {
-  return Boolean(
-    process.env.SMTP_HOST &&
-      process.env.SMTP_PORT &&
-      process.env.SMTP_USER &&
-      process.env.SMTP_PASS &&
-      process.env.SUPPORT_EMAIL
-  );
+function getMailConfig() {
+  if (
+    !env.SMTP_HOST ||
+    !env.SMTP_PORT ||
+    !env.SMTP_USER ||
+    !env.SMTP_PASS ||
+    !env.SUPPORT_EMAIL
+  ) {
+    return null;
+  }
+
+  return {
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    user: env.SMTP_USER,
+    pass: env.SMTP_PASS,
+    from: env.MAIL_FROM ?? env.SMTP_USER,
+    supportEmail: env.SUPPORT_EMAIL,
+  };
 }
 
 function escapeHtml(value: string) {
@@ -108,16 +120,16 @@ function buildHtmlContent(data: SupportNotificationInput) {
 }
 
 class SupportNotificationService {
-  private createTransporter() {
-    const smtpPort = Number(process.env.SMTP_PORT);
-
+  private createTransporter(
+    config: NonNullable<ReturnType<typeof getMailConfig>>
+  ) {
     return nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: smtpPort,
-      secure: smtpPort === 465,
+      host: config.host,
+      port: config.port,
+      secure: config.port === 465,
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user: config.user,
+        pass: config.pass,
       },
       connectionTimeout: 10000,
       greetingTimeout: 10000,
@@ -126,7 +138,9 @@ class SupportNotificationService {
   }
 
   async sendNewTicketNotification(data: SupportNotificationInput) {
-    if (!isMailConfigured()) {
+    const mailConfig = getMailConfig();
+
+    if (!mailConfig) {
       console.warn(
         '[supportNotificationService] SMTP/SUPPORT_EMAIL não configurados. E-mail não enviado.'
       );
@@ -138,7 +152,7 @@ class SupportNotificationService {
       };
     }
 
-    const transporter = this.createTransporter();
+    const transporter = this.createTransporter(mailConfig);
 
     await transporter.verify();
 
@@ -155,10 +169,10 @@ class SupportNotificationService {
       : [];
 
     await transporter.sendMail({
-      from: process.env.SMTP_USER,
-      to: process.env.SUPPORT_EMAIL,
+      from: mailConfig.from,
+      to: mailConfig.supportEmail,
       replyTo: data.userEmail,
-      subject: `[${process.env.APP_NAME || 'Sentinela'}][Suporte] #${data.ticketId} - ${data.subject}`,
+      subject: `[${env.APP_NAME}][Suporte] #${data.ticketId} - ${data.subject}`,
       text: buildTextContent(data),
       html: buildHtmlContent(data),
       attachments,

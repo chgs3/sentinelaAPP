@@ -8,6 +8,11 @@ Aplicativo de controle de gastos com entrada em linguagem natural.
 - `mobile`: aplicativo React Native
 - `docs`: anotações do projeto, decisões e documentação
 
+## Executar localmente
+
+Consulte [Configuração de ambientes](docs/configuracao-de-ambientes.md) para
+preparar PostgreSQL, backend, aplicativo mobile, variantes EAS e testes.
+
 ## Objetivo inicial
 
 Permitir registrar gastos através de frases como:

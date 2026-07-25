@@ -19,16 +19,15 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 
 import { api } from '../../services/api';
-import { getToken } from '../../services/authStorage';
 import { useAppTheme } from '../../hooks/useAppTheme';
 import type {
   AuthUser,
   SupportCategory,
   SupportPayload,
+  SupportResponse,
 } from '../../types';
 
 const MAX_BASE64_LENGTH = 2_500_000;
-const SUPPORT_URL = 'https://sentinela-backend-beta.onrender.com/support';
 
 const categoryOptions: Array<{
   label: string;
@@ -256,29 +255,7 @@ export default function SupportScreen() {
     try {
       setSubmitting(true);
 
-      const token = await getToken();
-
-      if (!token) {
-        Alert.alert('Erro', 'Sessão inválida. Faça login novamente.');
-        return;
-      }
-
-      const response = await fetch(SUPPORT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data?.message ?? 'Não foi possível enviar sua solicitação de suporte.'
-        );
-      }
+      await api.post<SupportResponse>('/support', payload);
 
       resetForm();
 
@@ -287,11 +264,13 @@ export default function SupportScreen() {
         'Seu chamado foi registrado com sucesso.'
       );
     } catch (error: any) {
-      console.error('[SUPPORT FETCH] erro:', error);
+      console.error('[SUPPORT API] erro:', error);
 
       Alert.alert(
         'Erro',
-        error?.message ?? 'Não foi possível enviar sua solicitação de suporte.'
+        error?.response?.data?.message ??
+          error?.message ??
+          'Não foi possível enviar sua solicitação de suporte.'
       );
     } finally {
       setSubmitting(false);

@@ -1,40 +1,27 @@
 import type { ExpoConfig } from 'expo/config';
+import { resolveMobileEnvironment } from './config/environment.js';
 
-const APP_ENV = process.env.APP_ENV ?? 'dev';
-
-const apiUrlByEnv: Record<string, string> = {
-  dev: 'http://192.168.1.12:3333',
-  beta: 'https://sentinela-backend-beta.onrender.com',
-  prod: 'https://api.seudominio.com',
-};
-
-const appNameByEnv: Record<string, string> = {
-  dev: 'Sentinela Dev',
-  beta: 'Sentinela Beta',
-  prod: 'Sentinela',
-};
-
-const schemeByEnv: Record<string, string> = {
-  dev: 'sentinela-dev',
-  beta: 'sentinela-beta',
-  prod: 'sentinela',
-};
+const environment = resolveMobileEnvironment({
+  APP_ENV: process.env.APP_ENV,
+  EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
+});
 
 const config: ExpoConfig = {
-  name: appNameByEnv[APP_ENV] ?? 'Sentinela Dev',
+  name: environment.name,
   slug: 'mobile',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/images/icon.png',
-  scheme: schemeByEnv[APP_ENV] ?? 'sentinela-dev',
+  scheme: environment.scheme,
   userInterfaceStyle: 'light',
 
   ios: {
     icon: './assets/expo.icon',
+    bundleIdentifier: environment.iosBundleIdentifier,
   },
 
   android: {
-    package: 'com.caiquedev.sentinela',
+    package: environment.androidPackage,
     adaptiveIcon: {
       backgroundColor: '#E6F4FE',
       foregroundImage: './assets/images/android-icon-foreground.png',
@@ -73,8 +60,8 @@ const config: ExpoConfig = {
   },
 
   extra: {
-    appEnv: APP_ENV,
-    apiUrl: apiUrlByEnv[APP_ENV] ?? apiUrlByEnv.dev,
+    appEnv: environment.appEnv,
+    apiUrl: environment.apiUrl,
     eas: {
       projectId: '32a460de-c553-4ab2-a25a-c33ac9d79466',
     },
