@@ -1,13 +1,15 @@
 import { Router } from 'express';
 import supportController from '../controllers/supportController';
-import authMiddleware from '../middlewares/authMiddleware';
+import validateIdParamMiddleware from '../middlewares/validateIdParamMiddleware';
 
 const supportRoutes = Router();
 
-supportRoutes.use(authMiddleware);
-
 supportRoutes.post('/', supportController.create);
 supportRoutes.get('/', supportController.list);
-supportRoutes.get('/:id', supportController.getById);
+supportRoutes.get(
+  '/:id',
+  validateIdParamMiddleware,
+  supportController.getById
+);
 
 export default supportRoutes;

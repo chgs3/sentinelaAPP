@@ -1,49 +1,83 @@
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import routes from './routes';
 import { env } from './config/env';
+import { buildCorsOptions } from './config/cors';
+import { apiRateLimiter } from './middlewares/rateLimiters';
+import requestContextMiddleware from './middlewares/requestContextMiddleware';
 
 const app = express();
 
-app.use(cors());
+app.disable('x-powered-by');
 
+if (env.TRUST_PROXY) {
+  app.set('trust proxy', 1);
+}
+
+app.use(requestContextMiddleware);
+app.use(
+  helmet({
+    crossOriginResourcePolicy: {
+      policy: 'cross-origin',
+    },
+    strictTransportSecurity: env.NODE_ENV === 'production' ? undefined : false,
+  })
+);
+app.use(cors(buildCorsOptions(env.CORS_ORIGINS, env.NODE_ENV)));
+app.use(apiRateLimiter);
 app.use(
   express.json({
-    limit: '10mb',
+    limit: env.JSON_BODY_LIMIT,
   })
 );
 
 app.use(
   express.urlencoded({
-    limit: '10mb',
+    limit: env.JSON_BODY_LIMIT,
     extended: true,
   })
 );
 
-// Loga todas as requisições que entram na aplicação
-app.use((req: Request, res: Response, next: NextFunction) => {
-  if (env.NODE_ENV !== 'test') {
-    console.log(`[APP] ${req.method} ${req.originalUrl}`);
-  }
-
-  next();
-});
-
 app.use(routes);
 
-// Middleware global para capturar erros não tratados no pipeline
 app.use(
   (err: any, req: Request, res: Response, _next: NextFunction) => {
-    console.error('[APP] erro global:', err);
+    const statusCode =
+      err?.type === 'entity.too.large'
+        ? 413
+        : err?.type === 'entity.parse.failed'
+          ? 400
+          : typeof err?.statusCode === 'number'
+            ? err.statusCode
+            : 500;
 
-    if (err?.type === 'entity.too.large') {
-      return res.status(413).json({
-        message: 'Arquivo enviado é muito grande.',
-      });
+    const message =
+      statusCode === 413
+        ? 'Conteúdo enviado é muito grande.'
+        : statusCode === 400
+          ? 'JSON inválido.'
+          : statusCode === 403
+            ? 'Origem não permitida.'
+            : 'Erro interno do servidor.';
+
+    if (env.NODE_ENV !== 'test') {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          event: 'http_error',
+          requestId: req.requestId,
+          method: req.method,
+          path: req.originalUrl,
+          statusCode,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
     }
 
-    return res.status(500).json({
-      message: 'Erro interno do servidor.',
+    return res.status(statusCode).json({
+      message,
+      requestId: req.requestId,
     });
   }
 );

@@ -10,6 +10,9 @@ import { settleDebtMessageSchema } from '../schemas/debtSettleMessageSchemas';
 import { getZodErrorMessage } from '../utils/zodError';
 import parseDebtMessageService from '../services/parseDebtMessageService';
 import settleDebtMessageService from '../services/settleDebtMessageService';
+import { serializeDebt } from '../utils/serializeFinancial';
+import { paginationQuerySchema } from '../schemas/commonSchemas';
+import { logError } from '../utils/logger';
 
 function normalizeText(value: string) {
   return value
@@ -122,9 +125,12 @@ class DebtController {
         },
       });
 
-      return res.status(201).json(debt);
+      return res.status(201).json(serializeDebt(debt));
     } catch (error) {
-      console.error(error);
+      logError('debt_create_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao criar dívida.',
       });
@@ -183,10 +189,13 @@ class DebtController {
       return res.status(201).json({
         status: 'created',
         message: 'Dívida registrada com sucesso.',
-        debt,
+        debt: serializeDebt(debt),
       });
     } catch (error) {
-      console.error(error);
+      logError('debt_parse_create_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao registrar dívida por mensagem.',
       });
@@ -268,10 +277,13 @@ class DebtController {
           parsed.targetStatus === 'received'
             ? 'Dívida marcada como recebida.'
             : 'Dívida marcada como paga.',
-        debt: updatedDebt,
+        debt: serializeDebt(updatedDebt),
       });
     } catch (error) {
-      console.error(error);
+      logError('debt_settle_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao dar baixa na dívida por mensagem.',
       });
@@ -347,7 +359,7 @@ class DebtController {
             settleParsed.targetStatus === 'received'
               ? 'Dívida marcada como recebida.'
               : 'Dívida marcada como paga.',
-          debt: updatedDebt,
+          debt: serializeDebt(updatedDebt),
         });
       }
 
@@ -391,7 +403,7 @@ class DebtController {
         return res.status(201).json({
           status: 'created',
           message: 'Dívida registrada com sucesso.',
-          debt,
+          debt: serializeDebt(debt),
         });
       }
 
@@ -400,7 +412,10 @@ class DebtController {
         message: 'Não foi possível interpretar a mensagem.',
       });
     } catch (error) {
-      console.error(error);
+      logError('debt_message_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao processar a mensagem da dívida.',
       });
@@ -417,16 +432,31 @@ class DebtController {
         });
       }
 
+      const parsedQuery = paginationQuerySchema.safeParse(req.query);
+
+      if (!parsedQuery.success) {
+        return res.status(400).json({
+          message: getZodErrorMessage(parsedQuery.error),
+        });
+      }
+
       const debts = await prisma.debt.findMany({
         where: {
           userId,
         },
         orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+        take: parsedQuery.data.limit,
+        skip: parsedQuery.data.offset,
       });
 
-      return res.status(200).json(debts);
+      return res
+        .status(200)
+        .json(debts.map((debt) => serializeDebt(debt)));
     } catch (error) {
-      console.error(error);
+      logError('debt_list_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao listar dívidas.',
       });
@@ -485,9 +515,12 @@ class DebtController {
         },
       });
 
-      return res.status(200).json(updatedDebt);
+      return res.status(200).json(serializeDebt(updatedDebt));
     } catch (error) {
-      console.error(error);
+      logError('debt_update_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao atualizar dívida.',
       });
@@ -535,9 +568,12 @@ class DebtController {
         },
       });
 
-      return res.status(200).json(updatedDebt);
+      return res.status(200).json(serializeDebt(updatedDebt));
     } catch (error) {
-      console.error(error);
+      logError('debt_status_update_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao atualizar status da dívida.',
       });
@@ -578,7 +614,10 @@ class DebtController {
         message: 'Dívida removida com sucesso.',
       });
     } catch (error) {
-      console.error(error);
+      logError('debt_delete_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao remover dívida.',
       });

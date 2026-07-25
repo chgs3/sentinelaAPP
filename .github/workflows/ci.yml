@@ -33,6 +33,20 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sentinela
+          POSTGRES_PASSWORD: sentinela
+          POSTGRES_DB: sentinela
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sentinela -d sentinela"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: backend
@@ -58,6 +72,9 @@ jobs:
 
       - name: Gerar cliente Prisma
         run: npm run prisma:generate
+
+      - name: Validar migrations em PostgreSQL isolado
+        run: npm run prisma:deploy
 
       - name: Executar testes
         run: npm test

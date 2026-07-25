@@ -18,6 +18,9 @@ preparar PostgreSQL, backend, aplicativo mobile, variantes EAS e testes.
 Para validar cadastro, sessão, lançamentos, dashboard e dívidas, siga o
 [roteiro de validação do MVP](docs/validacao-do-mvp.md).
 
+As decisões de CORS, rate limiting, logs e armazenamento decimal estão em
+[Segurança e integridade financeira](docs/seguranca-e-integridade.md).
+
 ## Objetivo inicial
 
 Permitir registrar gastos através de frases como:

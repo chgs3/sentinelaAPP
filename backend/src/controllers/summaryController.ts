@@ -4,22 +4,32 @@ import { getZodErrorMessage } from '../utils/zodError';
 import { periodQuerySchema } from '../schemas/periodSchemas';
 import { summaryComparisonQuerySchema } from '../schemas/summaryComparisonSchemas';
 import { summaryDailyQuerySchema } from '../schemas/summaryDailySchemas';
+import {
+  addMoney,
+  subtractMoney,
+  sumMoney,
+} from '../utils/serializeFinancial';
+import { logError } from '../utils/logger';
 
 function buildPeriodSummary(
   transactions: Array<{
     type: string;
-    amount: number;
+    amount: unknown;
   }>
 ) {
-  const totalIncomes = transactions
-    .filter((transaction) => transaction.type === 'income')
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const totalIncomes = sumMoney(
+    transactions
+      .filter((transaction) => transaction.type === 'income')
+      .map((transaction) => transaction.amount)
+  );
 
-  const totalExpenses = transactions
-    .filter((transaction) => transaction.type === 'expense')
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const totalExpenses = sumMoney(
+    transactions
+      .filter((transaction) => transaction.type === 'expense')
+      .map((transaction) => transaction.amount)
+  );
 
-  const balance = totalIncomes - totalExpenses;
+  const balance = subtractMoney(totalIncomes, totalExpenses);
 
   return {
     totalIncomes,
@@ -90,7 +100,10 @@ class SummaryController {
 
       return res.status(200).json(buildPeriodSummary(transactions));
     } catch (error) {
-      console.error(error);
+      logError('summary_period_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao gerar resumo do período.',
       });
@@ -153,7 +166,7 @@ class SummaryController {
           };
         }
 
-        acc[key].total += transaction.amount;
+        acc[key].total = addMoney(acc[key].total, transaction.amount);
         acc[key].count += 1;
 
         return acc;
@@ -163,7 +176,10 @@ class SummaryController {
 
       return res.status(200).json(categories);
     } catch (error) {
-      console.error(error);
+      logError('summary_categories_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao gerar resumo por categoria.',
       });
@@ -234,16 +250,28 @@ class SummaryController {
         },
         diff: {
           totalIncomes:
-            currentSummary.totalIncomes - previousSummary.totalIncomes,
+            subtractMoney(
+              currentSummary.totalIncomes,
+              previousSummary.totalIncomes
+            ),
           totalExpenses:
-            currentSummary.totalExpenses - previousSummary.totalExpenses,
-          balance: currentSummary.balance - previousSummary.balance,
+            subtractMoney(
+              currentSummary.totalExpenses,
+              previousSummary.totalExpenses
+            ),
+          balance: subtractMoney(
+            currentSummary.balance,
+            previousSummary.balance
+          ),
           totalTransactions:
             currentSummary.totalTransactions - previousSummary.totalTransactions,
         },
       });
     } catch (error) {
-      console.error(error);
+      logError('summary_comparison_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao gerar comparativo mensal.',
       });
@@ -318,18 +346,30 @@ class SummaryController {
         if (!current) continue;
 
         if (transaction.type === 'income') {
-          current.totalIncomes += transaction.amount;
+          current.totalIncomes = addMoney(
+            current.totalIncomes,
+            transaction.amount
+          );
         } else if (transaction.type === 'expense') {
-          current.totalExpenses += transaction.amount;
+          current.totalExpenses = addMoney(
+            current.totalExpenses,
+            transaction.amount
+          );
         }
 
-        current.balance = current.totalIncomes - current.totalExpenses;
+        current.balance = subtractMoney(
+          current.totalIncomes,
+          current.totalExpenses
+        );
         current.totalTransactions += 1;
       }
 
       return res.status(200).json(Array.from(dailyMap.values()));
     } catch (error) {
-      console.error(error);
+      logError('summary_daily_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao gerar evolução diária.',
       });

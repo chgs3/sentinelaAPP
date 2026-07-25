@@ -6,6 +6,9 @@ import {
   createTransactionSchema,
   updateTransactionSchema,
 } from '../schemas/transactionSchemas';
+import { serializeTransaction } from '../utils/serializeFinancial';
+import { paginationQuerySchema } from '../schemas/commonSchemas';
+import { logError } from '../utils/logger';
 
 class TransactionController {
   async create(req: Request, res: Response) {
@@ -53,9 +56,12 @@ class TransactionController {
         },
       });
 
-      return res.status(201).json(transaction);
+      return res.status(201).json(serializeTransaction(transaction));
     } catch (error) {
-      console.error(error);
+      logError('transaction_create_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao criar transação.',
       });
@@ -76,6 +82,14 @@ class TransactionController {
       let whereClause: any = {
         userId,
       };
+
+      const parsedPagination = paginationQuerySchema.safeParse(req.query);
+
+      if (!parsedPagination.success) {
+        return res.status(400).json({
+          message: getZodErrorMessage(parsedPagination.error),
+        });
+      }
 
       if (hasPeriodFilter) {
         const parsedQuery = periodQuerySchema.safeParse(req.query);
@@ -108,11 +122,18 @@ class TransactionController {
         orderBy: {
           transactionAt: 'desc',
         },
+        take: parsedPagination.data.limit,
+        skip: parsedPagination.data.offset,
       });
 
-      return res.status(200).json(transactions);
+      return res
+        .status(200)
+        .json(transactions.map((transaction) => serializeTransaction(transaction)));
     } catch (error) {
-      console.error(error);
+      logError('transaction_list_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao listar transações.',
       });
@@ -180,9 +201,12 @@ class TransactionController {
         },
       });
 
-      return res.status(200).json(transaction);
+      return res.status(200).json(serializeTransaction(transaction));
     } catch (error) {
-      console.error(error);
+      logError('transaction_update_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao atualizar transação.',
       });
@@ -221,7 +245,10 @@ class TransactionController {
         message: 'Transação removida com sucesso.',
       });
     } catch (error) {
-      console.error(error);
+      logError('transaction_delete_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao remover transação.',
       });

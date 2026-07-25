@@ -1,14 +1,20 @@
 import { Router } from 'express';
 import transactionController from '../controllers/transactionController';
-import authMiddleware from '../middlewares/authMiddleware';
+import validateIdParamMiddleware from '../middlewares/validateIdParamMiddleware';
 
 const transactionRoutes = Router();
 
-transactionRoutes.use(authMiddleware);
-
 transactionRoutes.post('/', transactionController.create);
 transactionRoutes.get('/', transactionController.list);
-transactionRoutes.put('/:id', transactionController.update);
-transactionRoutes.delete('/:id', transactionController.delete);
+transactionRoutes.put(
+  '/:id',
+  validateIdParamMiddleware,
+  transactionController.update
+);
+transactionRoutes.delete(
+  '/:id',
+  validateIdParamMiddleware,
+  transactionController.delete
+);
 
 export default transactionRoutes;

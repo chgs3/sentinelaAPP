@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { moneyAmountSchema } from './commonSchemas';
 
 const nullableOptionalText = z
   .string()
@@ -11,10 +12,7 @@ export const createTransactionSchema = z.object({
   type: z.enum(['expense', 'income'], {
     error: 'Tipo de transação inválido.',
   }),
-  amount: z
-    .number({ error: 'Valor é obrigatório.' })
-    .finite('Valor inválido.')
-    .positive('O valor deve ser maior que zero.'),
+  amount: moneyAmountSchema,
   description: z
     .string({ error: 'Descrição é obrigatória.' })
     .trim()

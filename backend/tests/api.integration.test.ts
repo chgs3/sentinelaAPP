@@ -10,10 +10,16 @@ process.env.DATABASE_URL =
 process.env.JWT_SECRET =
   process.env.JWT_SECRET ?? 'sentinela-test-secret-with-at-least-32-chars';
 process.env.GEMINI_API_KEY = '';
+process.env.CORS_ORIGINS = 'http://allowed.test';
+process.env.JSON_BODY_LIMIT = '2kb';
+process.env.RATE_LIMIT_MAX = '1000';
+process.env.AUTH_RATE_LIMIT_MAX = '1000';
+process.env.TRUST_PROXY = 'false';
 
 type ApiResponse<T = any> = {
   status: number;
   body: T;
+  headers: Headers;
 };
 
 const memory = createInMemoryPrisma();
@@ -55,10 +61,12 @@ async function request<T = any>(
     method = 'GET',
     token,
     body,
+    headers,
   }: {
     method?: string;
     token?: string;
     body?: unknown;
+    headers?: Record<string, string>;
   } = {}
 ): Promise<ApiResponse<T>> {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -66,6 +74,7 @@ async function request<T = any>(
     headers: {
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...headers,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -74,6 +83,7 @@ async function request<T = any>(
   return {
     status: response.status,
     body: text ? JSON.parse(text) : undefined,
+    headers: response.headers,
   };
 }
 
@@ -95,9 +105,26 @@ async function registerUser(
 }
 
 test('expõe saúde e protege rotas privadas', async () => {
-  const health = await request('/health');
+  const health = await request('/health', {
+    headers: {
+      Origin: 'http://allowed.test',
+    },
+  });
   assert.equal(health.status, 200);
   assert.equal(health.body.message, 'API funcionando corretamente');
+  assert.equal(
+    health.headers.get('access-control-allow-origin'),
+    'http://allowed.test'
+  );
+  assert.equal(health.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(
+    health.headers.get('cross-origin-resource-policy'),
+    'cross-origin'
+  );
+  assert.equal(health.headers.get('strict-transport-security'), null);
+  assert.equal(health.headers.get('x-powered-by'), null);
+  assert.ok(health.headers.get('x-request-id'));
+  assert.ok(health.headers.get('ratelimit'));
 
   const withoutToken = await request('/transactions');
   assert.equal(withoutToken.status, 401);
@@ -108,6 +135,29 @@ test('expõe saúde e protege rotas privadas', async () => {
   });
   assert.equal(invalidToken.status, 401);
   assert.equal(invalidToken.body.message, 'Token inválido.');
+});
+
+test('bloqueia origem web desconhecida e payload acima do limite', async () => {
+  const blockedOrigin = await request('/health', {
+    headers: {
+      Origin: 'https://malicioso.example',
+    },
+  });
+  assert.equal(blockedOrigin.status, 403);
+  assert.equal(blockedOrigin.body.message, 'Origem não permitida.');
+  assert.ok(blockedOrigin.body.requestId);
+
+  const oversizedPayload = await request('/auth/register', {
+    method: 'POST',
+    body: {
+      name: 'x'.repeat(3_000),
+      email: 'grande@example.com',
+      password: 'segredo123',
+    },
+  });
+  assert.equal(oversizedPayload.status, 413);
+  assert.equal(oversizedPayload.body.message, 'Conteúdo enviado é muito grande.');
+  assert.ok(oversizedPayload.body.requestId);
 });
 
 test('cadastra, normaliza email, autentica e restaura a sessão', async () => {
@@ -180,6 +230,19 @@ test('valida transações e impede acesso entre usuários', async () => {
   assert.equal(incompletePeriod.status, 400);
   assert.match(incompletePeriod.body.message, /endDate/);
 
+  const invalidPagination = await request('/transactions?limit=101', {
+    token: firstUser.token,
+  });
+  assert.equal(invalidPagination.status, 400);
+  assert.match(invalidPagination.body.message, /no máximo 100/);
+
+  const invalidId = await request('/transactions/abc', {
+    method: 'DELETE',
+    token: firstUser.token,
+  });
+  assert.equal(invalidId.status, 400);
+  assert.equal(invalidId.body.message, 'ID inválido.');
+
   const invalid = await request('/transactions', {
     method: 'POST',
     token: firstUser.token,
@@ -193,6 +256,20 @@ test('valida transações e impede acesso entre usuários', async () => {
   });
   assert.equal(invalid.status, 400);
   assert.match(invalid.body.message, /maior que zero/);
+
+  const excessivePrecision = await request('/transactions', {
+    method: 'POST',
+    token: firstUser.token,
+    body: {
+      type: 'expense',
+      amount: 10.123,
+      description: 'Precisão inválida',
+      category: 'Outros',
+      transactionAt,
+    },
+  });
+  assert.equal(excessivePrecision.status, 400);
+  assert.match(excessivePrecision.body.message, /duas casas decimais/);
 
   const created = await request('/transactions', {
     method: 'POST',
@@ -300,6 +377,12 @@ test('registra mensagens, resume o período e fecha o mês', async () => {
   assert.equal(income.status, 201);
   assert.equal(income.body.status, 'created');
   assert.equal(income.body.transaction.amount, 500);
+
+  const paginatedTransactions = await request('/transactions?limit=1', {
+    token: user.token,
+  });
+  assert.equal(paginatedTransactions.status, 200);
+  assert.equal(paginatedTransactions.body.length, 1);
 
   const malformedConfirmation = await request('/messages/confirm', {
     method: 'POST',

@@ -5,6 +5,12 @@ import {
   listMonthlyClosuresQuerySchema,
 } from '../schemas/monthlyClosureSchemas';
 import { getZodErrorMessage } from '../utils/zodError';
+import {
+  serializeMonthlyClosure,
+  subtractMoney,
+  sumMoney,
+} from '../utils/serializeFinancial';
+import { logError } from '../utils/logger';
 
 function getMonthDateRange(year: number, month: number) {
   const startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
@@ -62,15 +68,19 @@ class MonthlyClosureController {
         },
       });
 
-      const totalIncomes = transactions
-        .filter((transaction) => transaction.type === 'income')
-        .reduce((sum, transaction) => sum + transaction.amount, 0);
+      const totalIncomes = sumMoney(
+        transactions
+          .filter((transaction) => transaction.type === 'income')
+          .map((transaction) => transaction.amount)
+      );
 
-      const totalExpenses = transactions
-        .filter((transaction) => transaction.type === 'expense')
-        .reduce((sum, transaction) => sum + transaction.amount, 0);
+      const totalExpenses = sumMoney(
+        transactions
+          .filter((transaction) => transaction.type === 'expense')
+          .map((transaction) => transaction.amount)
+      );
 
-      const balance = totalIncomes - totalExpenses;
+      const balance = subtractMoney(totalIncomes, totalExpenses);
       const totalTransactions = transactions.length;
 
       const closure = await prisma.monthlyClosure.create({
@@ -89,10 +99,13 @@ class MonthlyClosureController {
 
       return res.status(201).json({
         message: 'Mês fechado com sucesso.',
-        closure,
+        closure: serializeMonthlyClosure(closure),
       });
     } catch (error) {
-      console.error(error);
+      logError('monthly_closure_create_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao fechar o mês.',
       });
@@ -125,11 +138,18 @@ class MonthlyClosureController {
           ...(year ? { year } : {}),
         },
         orderBy: [{ year: 'desc' }, { month: 'desc' }],
+        take: parsedQuery.data.limit,
+        skip: parsedQuery.data.offset,
       });
 
-      return res.status(200).json(closures);
+      return res
+        .status(200)
+        .json(closures.map((closure) => serializeMonthlyClosure(closure)));
     } catch (error) {
-      console.error(error);
+      logError('monthly_closure_list_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao listar fechamentos mensais.',
       });
@@ -170,7 +190,10 @@ class MonthlyClosureController {
         message: 'Mês reaberto com sucesso.',
       });
     } catch (error) {
-      console.error(error);
+      logError('monthly_closure_delete_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao reabrir o mês.',
       });

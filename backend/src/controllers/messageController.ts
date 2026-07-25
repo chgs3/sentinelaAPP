@@ -7,6 +7,8 @@ import { getZodErrorMessage } from '../utils/zodError';
 import { resolveRelativeDate } from '../utils/resolveRelativeDate';
 import { decideParseOutcome } from '../utils/decideParseOutcome';
 import { createTransactionSchema } from '../schemas/transactionSchemas';
+import { serializeTransaction } from '../utils/serializeFinancial';
+import { logError } from '../utils/logger';
 
 function normalizeText(value: string) {
   return value
@@ -165,15 +167,27 @@ class MessageController {
         });
       }
 
+      const validatedTransaction =
+        createTransactionSchema.safeParse(parsedWithResolvedDate);
+
+      if (!validatedTransaction.success) {
+        return res.status(200).json({
+          status: 'unable_to_parse',
+          message: getZodErrorMessage(validatedTransaction.error),
+          ambiguities: ['O lançamento não atende aos limites financeiros.'],
+          parsed: parsedWithResolvedDate,
+        });
+      }
+
       const transaction = await prisma.transaction.create({
         data: {
-          type: parsedWithResolvedDate.type,
-          amount: parsedWithResolvedDate.amount,
-          description: parsedWithResolvedDate.description,
-          category: parsedWithResolvedDate.category,
+          type: validatedTransaction.data.type,
+          amount: validatedTransaction.data.amount,
+          description: validatedTransaction.data.description,
+          category: validatedTransaction.data.category,
           transactionAt: resolvedDate,
-          paymentMethod: parsedWithResolvedDate.paymentMethod,
-          accountOrCard: parsedWithResolvedDate.accountOrCard,
+          paymentMethod: validatedTransaction.data.paymentMethod,
+          accountOrCard: validatedTransaction.data.accountOrCard,
           userId,
         },
       });
@@ -183,10 +197,13 @@ class MessageController {
         message: 'Transação criada com sucesso.',
         ambiguities: decision.ambiguities,
         parsed: parsedWithResolvedDate,
-        transaction,
+        transaction: serializeTransaction(transaction),
       });
     } catch (error) {
-      console.error('Erro em parseAndCreate:', error);
+      logError('message_parse_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao interpretar e criar transação.',
       });
@@ -236,10 +253,13 @@ class MessageController {
       return res.status(201).json({
         status: 'created',
         message: 'Transação confirmada e criada com sucesso.',
-        transaction,
+        transaction: serializeTransaction(transaction),
       });
     } catch (error) {
-      console.error('Erro em confirmParsedTransaction:', error);
+      logError('message_confirmation_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao confirmar a transação.',
       });

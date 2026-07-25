@@ -5,6 +5,7 @@ import { generateToken } from '../utils/auth';
 import { getZodErrorMessage } from '../utils/zodError';
 import { loginSchema, registerSchema } from '../schemas/authSchemas';
 import { updateProfileSchema } from '../schemas/profileSchemas';
+import { logError } from '../utils/logger';
 
 class AuthController {
   async register(req: Request, res: Response) {
@@ -51,7 +52,7 @@ class AuthController {
         },
       });
     } catch (error) {
-      console.error(error);
+      logError('auth_register_failed', error, { requestId: req.requestId });
       return res.status(500).json({
         message: 'Erro ao cadastrar usuário.',
       });
@@ -100,7 +101,7 @@ class AuthController {
         },
       });
     } catch (error) {
-      console.error(error);
+      logError('auth_login_failed', error, { requestId: req.requestId });
       return res.status(500).json({
         message: 'Erro ao realizar login.',
       });
@@ -135,7 +136,10 @@ class AuthController {
         },
       });
     } catch (error) {
-      console.error(error);
+      logError('auth_me_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao buscar dados do usuário.',
       });
@@ -175,7 +179,10 @@ class AuthController {
         },
       });
     } catch (error) {
-      console.error(error);
+      logError('auth_profile_update_failed', error, {
+        requestId: req.requestId,
+        userId: req.userId,
+      });
       return res.status(500).json({
         message: 'Erro ao atualizar perfil.',
       });

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { paginationQuerySchema } from './commonSchemas';
 
 export const createSupportTicketSchema = z.object({
   category: z.enum(['bug', 'suggestion', 'question', 'improvement', 'other'], {
@@ -67,7 +68,7 @@ export const createSupportTicketSchema = z.object({
     .nullable(),
 });
 
-export const listSupportTicketsQuerySchema = z.object({
+export const listSupportTicketsQuerySchema = paginationQuerySchema.extend({
   status: z.enum(['open', 'in_progress', 'resolved'], {
     message: 'Status inválido.',
   }).optional(),

@@ -26,6 +26,14 @@ independentes. Isso permite instalar dev, beta e produção no mesmo aparelho.
    JWT_SECRET=uma-chave-aleatoria-com-pelo-menos-32-caracteres
    ```
 
+   Em produção, configure também uma lista explícita de origens web e o proxy:
+
+   ```dotenv
+   NODE_ENV=production
+   CORS_ORIGINS=https://app.exemplo.com
+   TRUST_PROXY=true
+   ```
+
 3. Prepare o Prisma e inicie a API:
 
    ```bash
@@ -38,6 +46,9 @@ O backend valida as variáveis ao iniciar. `GEMINI_API_KEY` é opcional; sem ela
 o parser local é usado. O envio de e-mail também é opcional, mas
 `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` e `SUPPORT_EMAIL` precisam
 ser preenchidos em conjunto.
+Consulte [Segurança e integridade financeira](seguranca-e-integridade.md) para
+as configurações de CORS, rate limiting, limites HTTP e aplicação segura da
+migration monetária.
 
 ## Aplicativo mobile
 
@@ -155,5 +166,5 @@ node --test --test-isolation=none tests/repository-hygiene.test.mjs
 
 O workflow `.github/workflows/ci.yml` executa as mesmas verificações no GitHub
 Actions a cada `push` para `master` e em todo pull request. Ele usa três jobs
-independentes para higiene do repositório, backend e mobile, sem acessar banco
-ou serviços externos.
+independentes para higiene do repositório, backend e mobile. O job de backend
+cria um PostgreSQL temporário e aplica todas as migrations antes dos testes.

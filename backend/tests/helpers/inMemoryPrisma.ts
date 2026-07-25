@@ -75,7 +75,7 @@ export function createInMemoryPrisma() {
         state.transactions.push(transaction);
         return transaction;
       },
-      async findMany({ where = {}, orderBy }: any = {}) {
+      async findMany({ where = {}, orderBy, take, skip = 0 }: any = {}) {
         const transactions = state.transactions.filter(
           (transaction) =>
             (where.userId === undefined ||
@@ -93,7 +93,7 @@ export function createInMemoryPrisma() {
           );
         }
 
-        return transactions;
+        return transactions.slice(skip, take === undefined ? undefined : skip + take);
       },
       async findFirst({ where }: any) {
         return (
@@ -133,7 +133,7 @@ export function createInMemoryPrisma() {
         state.debts.push(debt);
         return debt;
       },
-      async findMany({ where = {}, orderBy }: any = {}) {
+      async findMany({ where = {}, orderBy, take, skip = 0 }: any = {}) {
         const debts = state.debts.filter(
           (debt) =>
             (where.userId === undefined || debt.userId === where.userId) &&
@@ -152,7 +152,7 @@ export function createInMemoryPrisma() {
           );
         }
 
-        return debts;
+        return debts.slice(skip, take === undefined ? undefined : skip + take);
       },
       async findFirst({ where }: any) {
         return (
@@ -197,8 +197,8 @@ export function createInMemoryPrisma() {
         state.monthlyClosures.push(closure);
         return closure;
       },
-      async findMany({ where = {} }: any = {}) {
-        return state.monthlyClosures
+      async findMany({ where = {}, take, skip = 0 }: any = {}) {
+        const closures = state.monthlyClosures
           .filter(
             (closure) =>
               (where.userId === undefined ||
@@ -206,6 +206,8 @@ export function createInMemoryPrisma() {
               (where.year === undefined || closure.year === where.year)
           )
           .sort((a, b) => b.year - a.year || b.month - a.month);
+
+        return closures.slice(skip, take === undefined ? undefined : skip + take);
       },
       async findFirst({ where }: any) {
         return (
@@ -238,11 +240,13 @@ export function createInMemoryPrisma() {
         state.supportTickets.push(ticket);
         return ticket;
       },
-      async findMany({ where = {} }: any = {}) {
-        return state.supportTickets.filter(
+      async findMany({ where = {}, take, skip = 0 }: any = {}) {
+        const tickets = state.supportTickets.filter(
           (ticket) =>
             where.userId === undefined || ticket.userId === where.userId
         );
+
+        return tickets.slice(skip, take === undefined ? undefined : skip + take);
       },
       async findFirst({ where }: any) {
         return (
