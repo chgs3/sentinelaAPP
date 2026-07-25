@@ -86,7 +86,7 @@ ambiente `production` do EAS antes do build. Variáveis com o prefixo
 
 ## Testes locais
 
-Use Node.js 22 e instale as dependências de cada pacote antes da primeira
+Use Node.js 24 e instale as dependências de cada pacote antes da primeira
 execução. Para reproduzir exatamente as versões dos arquivos de lock, prefira
 `npm ci`.
 
