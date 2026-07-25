@@ -2,6 +2,10 @@ import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { getZodErrorMessage } from '../utils/zodError';
 import { periodQuerySchema } from '../schemas/periodSchemas';
+import {
+  createTransactionSchema,
+  updateTransactionSchema,
+} from '../schemas/transactionSchemas';
 
 class TransactionController {
   async create(req: Request, res: Response) {
@@ -12,6 +16,14 @@ class TransactionController {
         return res.status(401).json({ message: 'Usuário não autenticado.' });
       }
 
+      const parsedBody = createTransactionSchema.safeParse(req.body);
+
+      if (!parsedBody.success) {
+        return res.status(400).json({
+          message: getZodErrorMessage(parsedBody.error),
+        });
+      }
+
       const {
         type,
         amount,
@@ -20,7 +32,7 @@ class TransactionController {
         transactionAt,
         paymentMethod,
         accountOrCard,
-      } = req.body;
+      } = parsedBody.data;
 
       const parsedDate = new Date(transactionAt);
 
@@ -59,8 +71,7 @@ class TransactionController {
       }
 
       const hasPeriodFilter =
-        typeof req.query.startDate === 'string' &&
-        typeof req.query.endDate === 'string';
+        req.query.startDate !== undefined || req.query.endDate !== undefined;
 
       let whereClause: any = {
         userId,
@@ -130,6 +141,14 @@ class TransactionController {
         });
       }
 
+      const parsedBody = updateTransactionSchema.safeParse(req.body);
+
+      if (!parsedBody.success) {
+        return res.status(400).json({
+          message: getZodErrorMessage(parsedBody.error),
+        });
+      }
+
       const {
         type,
         amount,
@@ -138,7 +157,7 @@ class TransactionController {
         transactionAt,
         paymentMethod,
         accountOrCard,
-      } = req.body;
+      } = parsedBody.data;
 
       const parsedDate = new Date(transactionAt);
 

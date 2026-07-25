@@ -1,70 +1,33 @@
 import { z } from 'zod';
 
+const nullableOptionalText = z
+  .string()
+  .trim()
+  .min(1, 'O texto não pode estar vazio.')
+  .nullable()
+  .optional();
+
 export const createTransactionSchema = z.object({
   type: z.enum(['expense', 'income'], {
-    error: 'Tipo deve ser expense ou income.',
+    error: 'Tipo de transação inválido.',
   }),
-
-  amount: z.coerce
-    .number()
-    .positive({ error: 'Valor deve ser maior que zero.' }),
-
+  amount: z
+    .number({ error: 'Valor é obrigatório.' })
+    .finite('Valor inválido.')
+    .positive('O valor deve ser maior que zero.'),
   description: z
     .string({ error: 'Descrição é obrigatória.' })
     .trim()
-    .min(1, { error: 'Descrição é obrigatória.' }),
-
+    .min(1, 'Descrição é obrigatória.'),
   category: z
     .string({ error: 'Categoria é obrigatória.' })
     .trim()
-    .min(1, { error: 'Categoria é obrigatória.' }),
-
-  transactionAt: z.string({ error: 'transactionAt é obrigatório.' }),
-
-  paymentMethod: z
-    .string()
-    .trim()
-    .nullable()
-    .optional(),
-
-  accountOrCard: z
-    .string()
-    .trim()
-    .nullable()
-    .optional(),
+    .min(1, 'Categoria é obrigatória.'),
+  transactionAt: z
+    .string({ error: 'Data é obrigatória.' })
+    .datetime({ error: 'Data inválida.' }),
+  paymentMethod: nullableOptionalText,
+  accountOrCard: nullableOptionalText,
 });
 
-export const updateTransactionSchema = z.object({
-  type: z.enum(['expense', 'income']).optional(),
-
-  amount: z.coerce
-    .number()
-    .positive({ error: 'Valor deve ser maior que zero.' })
-    .optional(),
-
-  description: z
-    .string()
-    .trim()
-    .min(1, { error: 'Descrição não pode ser vazia.' })
-    .optional(),
-
-  category: z
-    .string()
-    .trim()
-    .min(1, { error: 'Categoria não pode ser vazia.' })
-    .optional(),
-
-  transactionAt: z.string().optional(),
-
-  paymentMethod: z
-    .string()
-    .trim()
-    .nullable()
-    .optional(),
-
-  accountOrCard: z
-    .string()
-    .trim()
-    .nullable()
-    .optional(),
-});
+export const updateTransactionSchema = createTransactionSchema;

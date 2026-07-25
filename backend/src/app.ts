@@ -1,6 +1,7 @@
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import routes from './routes';
+import { env } from './config/env';
 
 const app = express();
 
@@ -21,7 +22,10 @@ app.use(
 
 // Loga todas as requisições que entram na aplicação
 app.use((req: Request, res: Response, next: NextFunction) => {
-  console.log(`[APP] ${req.method} ${req.originalUrl}`);
+  if (env.NODE_ENV !== 'test') {
+    console.log(`[APP] ${req.method} ${req.originalUrl}`);
+  }
+
   next();
 });
 

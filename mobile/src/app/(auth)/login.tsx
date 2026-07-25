@@ -17,6 +17,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../services/api';
 import { saveToken } from '../../services/authStorage';
 import { useAppTheme } from '../../hooks/useAppTheme';
+import {
+  getApiErrorMessage,
+  validateLoginFields,
+} from '../../utils/authFlow';
 
 export default function LoginScreen() {
   const { colors } = useAppTheme();
@@ -26,8 +30,10 @@ export default function LoginScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   async function handleLogin() {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Atenção', 'Preencha email e senha.');
+    const validationMessage = validateLoginFields(email, password);
+
+    if (validationMessage) {
+      Alert.alert('Atenção', validationMessage);
       return;
     }
 
@@ -46,8 +52,10 @@ export default function LoginScreen() {
     } catch (error: any) {
       console.error(error);
 
-      const apiMessage =
-        error?.response?.data?.message ?? 'Não foi possível realizar login.';
+      const apiMessage = getApiErrorMessage(
+        error,
+        'Não foi possível realizar login.'
+      );
 
       Alert.alert('Erro', apiMessage);
     } finally {

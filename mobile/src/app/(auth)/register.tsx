@@ -16,6 +16,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { api } from '../../services/api';
 import { useAppTheme } from '../../hooks/useAppTheme';
+import {
+  getApiErrorMessage,
+  validateRegistrationFields,
+} from '../../utils/authFlow';
 
 export default function RegisterScreen() {
   const { colors } = useAppTheme();
@@ -26,8 +30,10 @@ export default function RegisterScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   async function handleRegister() {
-    if (!name.trim() || !email.trim() || !password.trim()) {
-      Alert.alert('Atenção', 'Preencha nome, email e senha.');
+    const validationMessage = validateRegistrationFields(name, email, password);
+
+    if (validationMessage) {
+      Alert.alert('Atenção', validationMessage);
       return;
     }
 
@@ -49,8 +55,10 @@ export default function RegisterScreen() {
     } catch (error: any) {
       console.error(error);
 
-      const apiMessage =
-        error?.response?.data?.message ?? 'Não foi possível criar a conta.';
+      const apiMessage = getApiErrorMessage(
+        error,
+        'Não foi possível criar a conta.'
+      );
 
       Alert.alert('Erro', apiMessage);
     } finally {

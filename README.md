@@ -15,6 +15,9 @@ Aplicativo de controle de gastos com entrada em linguagem natural.
 Consulte [Configuração de ambientes](docs/configuracao-de-ambientes.md) para
 preparar PostgreSQL, backend, aplicativo mobile, variantes EAS e testes.
 
+Para validar cadastro, sessão, lançamentos, dashboard e dívidas, siga o
+[roteiro de validação do MVP](docs/validacao-do-mvp.md).
+
 ## Objetivo inicial
 
 Permitir registrar gastos através de frases como:

@@ -107,7 +107,8 @@ Use Node.js 24 e instale as dependências de cada pacote antes da primeira
 execução. Para reproduzir exatamente as versões dos arquivos de lock, prefira
 `npm ci`.
 
-Backend (testes unitários e de regressão dos parsers, seguida da compilação):
+Backend (testes unitários, de regressão e integração HTTP isolada, seguidos da
+compilação):
 
 ```bash
 cd backend
@@ -120,6 +121,9 @@ npm run build
 
 Os testes do parser cobrem despesas, receitas, Pix ambíguo, transferências,
 dívidas, quitações, datas relativas e valores com separadores brasileiros.
+Os testes HTTP usam persistência em memória e não modificam o PostgreSQL
+configurado no `.env`. O roteiro funcional completo está em
+[Validação do MVP](validacao-do-mvp.md).
 
 Mobile (configuração, testes, tipos e lint):
 

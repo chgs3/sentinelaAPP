@@ -6,6 +6,7 @@ import { parseMessageSchema } from '../schemas/messageSchemas';
 import { getZodErrorMessage } from '../utils/zodError';
 import { resolveRelativeDate } from '../utils/resolveRelativeDate';
 import { decideParseOutcome } from '../utils/decideParseOutcome';
+import { createTransactionSchema } from '../schemas/transactionSchemas';
 
 function normalizeText(value: string) {
   return value
@@ -202,14 +203,15 @@ class MessageController {
         });
       }
 
-      const { parsed } = req.body;
+      const parsedBody = createTransactionSchema.safeParse(req.body?.parsed);
 
-      if (!parsed) {
+      if (!parsedBody.success) {
         return res.status(400).json({
-          message: 'Dados parseados são obrigatórios para confirmação.',
+          message: getZodErrorMessage(parsedBody.error),
         });
       }
 
+      const parsed = parsedBody.data;
       const resolvedDate = new Date(parsed.transactionAt);
 
       if (Number.isNaN(resolvedDate.getTime())) {
