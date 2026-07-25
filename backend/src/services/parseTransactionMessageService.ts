@@ -4,6 +4,10 @@ import type {
   TransactionCategory,
   TransactionType,
 } from '../types/parsedTransaction';
+import {
+  MONETARY_AMOUNT_PATTERN,
+  parseMonetaryAmount,
+} from '../utils/parseMonetaryAmount';
 
 function normalizeText(value: string) {
   return value
@@ -15,15 +19,7 @@ function normalizeText(value: string) {
 }
 
 function extractAmount(raw: string): number | null {
-  const matches = raw.match(/\d+(?:[.,]\d{1,2})?/g);
-
-  if (!matches?.length) return null;
-
-  const value = Number(matches[0].replace(',', '.'));
-
-  if (Number.isNaN(value) || value <= 0) return null;
-
-  return value;
+  return parseMonetaryAmount(raw);
 }
 
 function detectRawDateExpression(normalized: string): string | null {
@@ -342,7 +338,7 @@ function cleanupDescription(value: string | null | undefined) {
 
 function removeNoiseFromShortMessage(normalized: string) {
   return normalized
-    .replace(/\d+(?:[.,]\d{1,2})?/g, ' ')
+    .replace(new RegExp(MONETARY_AMOUNT_PATTERN, 'g'), ' ')
     .replace(
       /\b(hoje|ontem|anteontem|domingo|segunda|segunda-feira|terca|terça|terça-feira|quarta|quarta-feira|quinta|quinta-feira|sexta|sexta-feira|sabado|sábado)\b/g,
       ' '
@@ -373,17 +369,50 @@ function inferDescription(
   }
 
   const patterns = [
-    /\bgastei\s+\d+(?:[.,]\d{1,2})?\s+(?:com|no|na|em)\s+(.+)$/i,
-    /\bpaguei\s+\d+(?:[.,]\d{1,2})?\s+(?:com|no|na|em)?\s*(.+)$/i,
-    /\bcomprei\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|com)?\s*(.+)$/i,
-    /\brecebi\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|via|pelo|pela)?\s*(.+)$/i,
-    /\bganhei\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da)?\s*(.+)$/i,
-    /\bentrou\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da)?\s*(.+)$/i,
-    /\bcaiu\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da)?\s*(.+)$/i,
-    /\bsalario\s+\d+(?:[.,]\d{1,2})?\s*(.*)$/i,
-    /\bsal[aá]rio\s+\d+(?:[.,]\d{1,2})?\s*(.*)$/i,
-    /\bfreela\s+\d+(?:[.,]\d{1,2})?\s*(.*)$/i,
-    /\bpix\s+\d+(?:[.,]\d{1,2})?\s+(?:de|do|da|com|para|pra|pro)?\s*(.+)$/i,
+    new RegExp(
+      String.raw`\bgastei\s+${MONETARY_AMOUNT_PATTERN}\s+(?:com|no|na|em)\s+(.+)$`,
+      'i'
+    ),
+    new RegExp(
+      String.raw`\bpaguei\s+${MONETARY_AMOUNT_PATTERN}\s+(?:com|no|na|em)?\s*(.+)$`,
+      'i'
+    ),
+    new RegExp(
+      String.raw`\bcomprei\s+${MONETARY_AMOUNT_PATTERN}\s+(?:de|do|da|com)?\s*(.+)$`,
+      'i'
+    ),
+    new RegExp(
+      String.raw`\brecebi\s+${MONETARY_AMOUNT_PATTERN}\s+(?:de|do|da|via|pelo|pela)?\s*(.+)$`,
+      'i'
+    ),
+    new RegExp(
+      String.raw`\bganhei\s+${MONETARY_AMOUNT_PATTERN}\s+(?:de|do|da)?\s*(.+)$`,
+      'i'
+    ),
+    new RegExp(
+      String.raw`\bentrou\s+${MONETARY_AMOUNT_PATTERN}\s+(?:de|do|da)?\s*(.+)$`,
+      'i'
+    ),
+    new RegExp(
+      String.raw`\bcaiu\s+${MONETARY_AMOUNT_PATTERN}\s+(?:de|do|da)?\s*(.+)$`,
+      'i'
+    ),
+    new RegExp(
+      String.raw`\bsalario\s+${MONETARY_AMOUNT_PATTERN}\s*(.*)$`,
+      'i'
+    ),
+    new RegExp(
+      String.raw`\bsal[aá]rio\s+${MONETARY_AMOUNT_PATTERN}\s*(.*)$`,
+      'i'
+    ),
+    new RegExp(
+      String.raw`\bfreela\s+${MONETARY_AMOUNT_PATTERN}\s*(.*)$`,
+      'i'
+    ),
+    new RegExp(
+      String.raw`\bpix\s+${MONETARY_AMOUNT_PATTERN}\s+(?:de|do|da|com|para|pra|pro)?\s*(.+)$`,
+      'i'
+    ),
   ];
 
   for (const pattern of patterns) {

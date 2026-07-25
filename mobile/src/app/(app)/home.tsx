@@ -46,10 +46,10 @@ import type {
 
 type TransactionTypeFilter = 'all' | 'expense' | 'income';
 
-const paymentMethodOptions: Array<{
+const paymentMethodOptions: {
   label: string;
   value: ParsedTransaction['paymentMethod'];
-}> = [
+}[] = [
   { label: 'Pix', value: 'pix' },
   { label: 'Crédito', value: 'credit' },
   { label: 'Débito', value: 'debit' },
@@ -111,7 +111,7 @@ export default function HomeScreen() {
 
   const period = useMemo(() => getMonthRange(selectedMonth), [selectedMonth]);
 
-  async function loadData(showInitialLoading = false) {
+  const loadData = useCallback(async (showInitialLoading = false) => {
     try {
       if (showInitialLoading) {
         setLoading(true);
@@ -145,7 +145,7 @@ export default function HomeScreen() {
         setLoading(false);
       }
     }
-  }
+  }, [period.startDate, period.endDate]);
 
   async function handleRefresh() {
     try {
@@ -396,23 +396,23 @@ export default function HomeScreen() {
 
   useEffect(() => {
     loadData(true);
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     loadData(false);
-  }, [period.startDate, period.endDate]);
+  }, [loadData]);
 
   useFocusEffect(
     useCallback(() => {
       loadData(false);
-    }, [period.startDate, period.endDate])
+    }, [loadData])
   );
 
   function formatCurrency(value: number) {
     return formatCurrencyBRL(value);
   }
 
-  function getConfidenceLevel(confidence?: number) {
+  const getConfidenceLevel = useCallback((confidence?: number) => {
     if (confidence === undefined || confidence === null) {
       return {
         label: 'Sem nível informado',
@@ -442,7 +442,7 @@ export default function HomeScreen() {
       tone: colors.danger,
       bg: colors.dangerSoft,
     };
-  }
+  }, [colors]);
 
   const categories = useMemo(() => {
     const uniqueCategories = Array.from(
@@ -518,7 +518,7 @@ export default function HomeScreen() {
   const confidenceInfo = useMemo(() => {
     if (!confirmationForm) return null;
     return getConfidenceLevel(confirmationForm.confidence);
-  }, [confirmationForm, colors]);
+  }, [confirmationForm, getConfidenceLevel]);
 
   const confirmationSummary = useMemo(() => {
     if (!confirmationForm) return null;

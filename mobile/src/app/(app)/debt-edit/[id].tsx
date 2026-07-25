@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -40,7 +40,7 @@ export default function EditDebtScreen() {
   const [status, setStatus] = useState<DebtStatus>('pending');
   const [dueDate, setDueDate] = useState<Date | null>(null);
 
-  async function loadDebt() {
+  const loadDebt = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -71,11 +71,11 @@ export default function EditDebtScreen() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
 
   useEffect(() => {
     loadDebt();
-  }, []);
+  }, [loadDebt]);
 
   function handleDueDateChange(
     event: DateTimePickerEvent,
@@ -155,7 +155,7 @@ export default function EditDebtScreen() {
       return {
         label: 'A receber',
         color: colors.success,
-        bg: colors.successSoft ?? colors.surfaceSecondary,
+        bg: colors.successSoft,
       };
     }
 

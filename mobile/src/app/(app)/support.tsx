@@ -29,11 +29,11 @@ import type {
 
 const MAX_BASE64_LENGTH = 2_500_000;
 
-const categoryOptions: Array<{
+const categoryOptions: {
   label: string;
   value: SupportCategory;
   icon: keyof typeof Ionicons.glyphMap;
-}> = [
+}[] = [
   { label: 'Bug', value: 'bug', icon: 'bug-outline' },
   { label: 'Sugestão', value: 'suggestion', icon: 'bulb-outline' },
   { label: 'Dúvida', value: 'question', icon: 'help-circle-outline' },
@@ -318,8 +318,7 @@ export default function SupportScreen() {
               style={[
                 styles.heroIcon,
                 {
-                  backgroundColor:
-                    colors.primarySoft ?? colors.surfaceSecondary,
+                  backgroundColor: colors.primarySoft,
                 },
               ]}
             >

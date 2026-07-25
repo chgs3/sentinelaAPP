@@ -30,7 +30,7 @@ export default function SettingsScreen() {
           <View
             style={[
               styles.heroIcon,
-              { backgroundColor: colors.primarySoft ?? colors.surfaceSecondary },
+              { backgroundColor: colors.primarySoft },
             ]}
           >
             <Ionicons
@@ -62,7 +62,7 @@ export default function SettingsScreen() {
             <View
               style={[
                 styles.sectionIcon,
-                { backgroundColor: colors.primarySoft ?? colors.surfaceSecondary },
+                { backgroundColor: colors.primarySoft },
               ]}
             >
               <Ionicons
@@ -108,7 +108,7 @@ export default function SettingsScreen() {
                   styles.themeBadge,
                   {
                     backgroundColor: isDark
-                      ? colors.primarySoft ?? colors.surface
+                      ? colors.primarySoft
                       : colors.surface,
                   },
                 ]}
@@ -165,7 +165,7 @@ export default function SettingsScreen() {
             <View
               style={[
                 styles.sectionIcon,
-                { backgroundColor: colors.primarySoft ?? colors.surfaceSecondary },
+                { backgroundColor: colors.primarySoft },
               ]}
             >
               <Ionicons
@@ -238,7 +238,7 @@ export default function SettingsScreen() {
             <View
               style={[
                 styles.sectionIcon,
-                { backgroundColor: colors.primarySoft ?? colors.surfaceSecondary },
+                { backgroundColor: colors.primarySoft },
               ]}
             >
               <Ionicons

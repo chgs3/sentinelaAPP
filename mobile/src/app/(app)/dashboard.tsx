@@ -192,7 +192,7 @@ export default function DashboardScreen() {
 
   const period = useMemo(() => getMonthRange(selectedMonth), [selectedMonth]);
 
-  async function loadDashboard(showLoading = false) {
+  const loadDashboard = useCallback(async (showLoading = false) => {
     try {
       if (showLoading) {
         setLoading(true);
@@ -249,7 +249,7 @@ export default function DashboardScreen() {
         setLoading(false);
       }
     }
-  }
+  }, [period.startDate, period.endDate, selectedMonth]);
 
   async function handleRefresh() {
     try {
@@ -262,12 +262,12 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     loadDashboard(true);
-  }, [period.startDate, period.endDate]);
+  }, [loadDashboard]);
 
   useFocusEffect(
     useCallback(() => {
       loadDashboard(false);
-    }, [period.startDate, period.endDate])
+    }, [loadDashboard])
   );
 
   function goToPreviousMonth() {

@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository:
+    name: Higiene do repositório
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v7
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Executar testes de regressão
+        run: node --test --test-isolation=none tests/repository-hygiene.test.mjs
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql://sentinela:sentinela@localhost:5432/sentinela
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v7
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Bloquear vulnerabilidades críticas
+        run: npm audit --audit-level=critical
+
+      - name: Gerar cliente Prisma
+        run: npm run prisma:generate
+
+      - name: Executar testes
+        run: npm test
+
+      - name: Compilar
+        run: npm run build
+
+  mobile:
+    name: Mobile
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v7
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Bloquear vulnerabilidades críticas
+        run: npm audit --audit-level=critical
+
+      - name: Validar dependências do Expo
+        run: npx expo install --check
+
+      - name: Executar testes
+        run: npm test
+
+      - name: Verificar tipos
+        run: npm run typecheck
+
+      - name: Executar lint
+        run: npm run lint

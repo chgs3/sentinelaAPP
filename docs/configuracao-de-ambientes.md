@@ -86,20 +86,42 @@ ambiente `production` do EAS antes do build. Variáveis com o prefixo
 
 ## Testes locais
 
-Backend:
+Use Node.js 22 e instale as dependências de cada pacote antes da primeira
+execução. Para reproduzir exatamente as versões dos arquivos de lock, prefira
+`npm ci`.
+
+Backend (testes unitários e de regressão dos parsers, seguida da compilação):
 
 ```bash
 cd backend
+npm ci
+npm audit --audit-level=critical
+npm run prisma:generate
 npm test
 npm run build
 ```
 
-Mobile:
+Os testes do parser cobrem despesas, receitas, Pix ambíguo, transferências,
+dívidas, quitações, datas relativas e valores com separadores brasileiros.
+
+Mobile (configuração, testes, tipos e lint):
 
 ```bash
 cd mobile
+npm ci
+npm audit --audit-level=critical
+npx expo install --check
 npm test
+npm run typecheck
+npm run lint
 npx expo config --type public
+```
+
+Como atalho para testes, tipos e lint do mobile:
+
+```bash
+cd mobile
+npm run quality
 ```
 
 Regressão de higiene do repositório, a partir da raiz:
@@ -107,3 +129,10 @@ Regressão de higiene do repositório, a partir da raiz:
 ```bash
 node --test --test-isolation=none tests/repository-hygiene.test.mjs
 ```
+
+## Integração contínua
+
+O workflow `.github/workflows/ci.yml` executa as mesmas verificações no GitHub
+Actions a cada `push` para `master` e em todo pull request. Ele usa três jobs
+independentes para higiene do repositório, backend e mobile, sem acessar banco
+ou serviços externos.

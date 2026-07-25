@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type ThemeMode = 'light' | 'dark';
@@ -40,19 +47,19 @@ export function AppThemeProvider({
     loadThemePreference();
   }, []);
 
-  async function setThemeMode(mode: ThemeMode) {
+  const setThemeMode = useCallback(async (mode: ThemeMode) => {
     try {
       setThemeModeState(mode);
       await AsyncStorage.setItem(THEME_STORAGE_KEY, mode);
     } catch (error) {
       console.error('Erro ao salvar tema:', error);
     }
-  }
+  }, []);
 
-  async function toggleThemeMode() {
+  const toggleThemeMode = useCallback(async () => {
     const nextMode = themeMode === 'dark' ? 'light' : 'dark';
     await setThemeMode(nextMode);
-  }
+  }, [setThemeMode, themeMode]);
 
   const value = useMemo(
     () => ({
@@ -61,7 +68,7 @@ export function AppThemeProvider({
       toggleThemeMode,
       isThemeReady,
     }),
-    [themeMode, isThemeReady]
+    [themeMode, setThemeMode, toggleThemeMode, isThemeReady]
   );
 
   return (

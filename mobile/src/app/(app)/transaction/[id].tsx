@@ -30,7 +30,7 @@ export default function TransactionDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
 
-  async function loadTransaction() {
+  const loadTransaction = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -64,12 +64,13 @@ export default function TransactionDetailsScreen() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
 
   useFocusEffect(
     useCallback(() => {
-    loadTransaction();
-  }, [id]));
+      loadTransaction();
+    }, [loadTransaction])
+  );
 
 
   function formatCurrency(value: number) {
@@ -78,20 +79,6 @@ export default function TransactionDetailsScreen() {
 
   function getTransactionTypeLabel(value: TransactionType) {
     return value === 'income' ? 'Receita' : 'Despesa';
-  }
-
-  function getTypeTone(type: TransactionType) {
-    if (type === 'income') {
-      return {
-        text: colors.success,
-        bg: colors.successSoft ?? colors.surfaceSecondary,
-      };
-    }
-
-    return {
-      text: colors.danger,
-      bg: colors.dangerSoft,
-    };
   }
 
   const typeLabel = useMemo(() => {
@@ -107,7 +94,17 @@ export default function TransactionDetailsScreen() {
       };
     }
 
-    return getTypeTone(transaction.type);
+    if (transaction.type === 'income') {
+      return {
+        text: colors.success,
+        bg: colors.successSoft,
+      };
+    }
+
+    return {
+      text: colors.danger,
+      bg: colors.dangerSoft,
+    };
   }, [transaction, colors]);
 
   function goToEditTransaction() {

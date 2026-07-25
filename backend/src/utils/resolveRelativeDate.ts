@@ -32,15 +32,16 @@ function getMostRecentWeekday(referenceDate: Date, targetDay: number) {
 
 export function resolveRelativeDate(
   rawDateExpression: string | null | undefined,
-  fallbackIso: string
+  fallbackIso: string,
+  referenceDate = new Date()
 ): Date {
   const fallbackDate = new Date(fallbackIso);
+  const now = new Date(referenceDate);
 
   if (!rawDateExpression || !rawDateExpression.trim()) {
-    return Number.isNaN(fallbackDate.getTime()) ? new Date() : fallbackDate;
+    return Number.isNaN(fallbackDate.getTime()) ? now : fallbackDate;
   }
 
-  const now = new Date();
   const normalized = normalizeText(rawDateExpression);
 
   if (normalized === 'hoje') {
@@ -50,6 +51,12 @@ export function resolveRelativeDate(
   if (normalized === 'ontem') {
     const result = toStartOfDay(now);
     result.setDate(result.getDate() - 1);
+    return result;
+  }
+
+  if (normalized === 'anteontem') {
+    const result = toStartOfDay(now);
+    result.setDate(result.getDate() - 2);
     return result;
   }
 
@@ -91,5 +98,5 @@ export function resolveRelativeDate(
     }
   }
 
-  return Number.isNaN(fallbackDate.getTime()) ? new Date() : fallbackDate;
+  return Number.isNaN(fallbackDate.getTime()) ? now : fallbackDate;
 }

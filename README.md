@@ -1,5 +1,7 @@
 # Sentinela
 
+[![CI](https://github.com/chgs3/sentinelaAPP/actions/workflows/ci.yml/badge.svg)](https://github.com/chgs3/sentinelaAPP/actions/workflows/ci.yml)
+
 Aplicativo de controle de gastos com entrada em linguagem natural.
 
 ## Estrutura do projeto

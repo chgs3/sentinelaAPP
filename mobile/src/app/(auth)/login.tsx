@@ -82,8 +82,7 @@ export default function LoginScreen() {
               style={[
                 styles.heroIcon,
                 {
-                  backgroundColor:
-                    colors.primarySoft ?? colors.surfaceSecondary,
+                  backgroundColor: colors.primarySoft,
                 },
               ]}
             >

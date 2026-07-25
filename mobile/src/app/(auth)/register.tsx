@@ -89,8 +89,7 @@ export default function RegisterScreen() {
               style={[
                 styles.heroIcon,
                 {
-                  backgroundColor:
-                    colors.primarySoft ?? colors.surfaceSecondary,
+                  backgroundColor: colors.primarySoft,
                 },
               ]}
             >

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,10 +28,10 @@ import type { Transaction } from '../../../types';
 type EditableTransactionType = 'expense' | 'income';
 type EditablePaymentMethod = 'credit' | 'debit' | 'pix' | 'cash' | null;
 
-const paymentMethodOptions: Array<{
+const paymentMethodOptions: {
   label: string;
   value: EditablePaymentMethod;
-}> = [
+}[] = [
   { label: 'Pix', value: 'pix' },
   { label: 'Crédito', value: 'credit' },
   { label: 'Débito', value: 'debit' },
@@ -56,7 +56,7 @@ export default function EditTransactionScreen() {
     useState<EditablePaymentMethod>(null);
   const [accountOrCard, setAccountOrCard] = useState('');
 
-  async function loadTransaction() {
+  const loadTransaction = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -88,11 +88,11 @@ export default function EditTransactionScreen() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
 
   useEffect(() => {
     loadTransaction();
-  }, []);
+  }, [loadTransaction]);
 
   function handleDateChange(
     event: DateTimePickerEvent,
@@ -173,7 +173,7 @@ export default function EditTransactionScreen() {
       return {
         label: 'Receita',
         color: colors.success,
-        bg: colors.successSoft ?? colors.surfaceSecondary,
+        bg: colors.successSoft,
       };
     }
 

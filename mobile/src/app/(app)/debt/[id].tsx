@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,7 +28,7 @@ export default function DebtDetailsScreen() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  async function loadDebt() {
+  const loadDebt = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -62,11 +62,11 @@ export default function DebtDetailsScreen() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
 
   useEffect(() => {
     loadDebt();
-  }, []);
+  }, [loadDebt]);
 
   function formatCurrency(value: number) {
     return formatCurrencyBRL(value);
@@ -89,13 +89,20 @@ export default function DebtDetailsScreen() {
     }
   }
 
-  function getStatusTone(status: DebtStatus) {
-    switch (status) {
-      case 'pending':
-        return {
-          text: colors.text,
-          bg: colors.surfaceSecondary,
-        };
+  const debtTone = useMemo(() => {
+    if (!debt) return colors.text;
+    return debt.type === 'to_receive' ? colors.success : colors.danger;
+  }, [debt, colors]);
+
+  const statusTone = useMemo(() => {
+    if (!debt) {
+      return {
+        text: colors.text,
+        bg: colors.surfaceSecondary,
+      };
+    }
+
+    switch (debt.status) {
       case 'received':
         return {
           text: colors.success,
@@ -112,22 +119,6 @@ export default function DebtDetailsScreen() {
           bg: colors.surfaceSecondary,
         };
     }
-  }
-
-  const debtTone = useMemo(() => {
-    if (!debt) return colors.text;
-    return debt.type === 'to_receive' ? colors.success : colors.danger;
-  }, [debt, colors]);
-
-  const statusTone = useMemo(() => {
-    if (!debt) {
-      return {
-        text: colors.text,
-        bg: colors.surfaceSecondary,
-      };
-    }
-
-    return getStatusTone(debt.status);
   }, [debt, colors]);
 
   function goToEditDebt() {

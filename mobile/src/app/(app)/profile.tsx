@@ -114,7 +114,7 @@ export default function ProfileScreen() {
           <View
             style={[
               styles.avatar,
-              { backgroundColor: colors.primarySoft ?? colors.surfaceSecondary },
+              { backgroundColor: colors.primarySoft },
             ]}
           >
             <Text style={[styles.avatarText, { color: colors.primary }]}>

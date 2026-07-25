@@ -86,7 +86,7 @@ export default function DebtsScreen() {
   const [messageFeedback, setMessageFeedback] =
     useState<DebtMessageFeedback>(null);
 
-  async function loadDebts(showInitialLoading = false) {
+  const loadDebts = useCallback(async (showInitialLoading = false) => {
     try {
       if (showInitialLoading) {
         setLoading(true);
@@ -107,16 +107,16 @@ export default function DebtsScreen() {
         setLoading(false);
       }
     }
-  }
+  }, []);
 
   useEffect(() => {
     loadDebts(true);
-  }, []);
+  }, [loadDebts]);
 
   useFocusEffect(
     useCallback(() => {
       loadDebts(false);
-    }, [])
+    }, [loadDebts])
   );
 
   async function handleRefresh() {
@@ -405,7 +405,7 @@ export default function DebtsScreen() {
     resetMessageFeedback();
   }
 
-  function getFeedbackConfig() {
+  const feedbackConfig = useMemo(() => {
     if (!messageFeedback) return null;
 
     if (messageFeedback.status === 'needs_confirmation') {
@@ -435,12 +435,7 @@ export default function DebtsScreen() {
       tone: colors.danger,
       bg: colors.dangerSoft,
     };
-  }
-
-  const feedbackConfig = useMemo(
-    () => getFeedbackConfig(),
-    [messageFeedback, colors]
-  );
+  }, [messageFeedback, colors]);
 
   const totalToReceive = useMemo(
     () =>
@@ -669,8 +664,8 @@ export default function DebtsScreen() {
                 <Text
                   style={[styles.messageSubtitle, { color: colors.textMuted }]}
                 >
-                  Exemplos: "João me deve 80 do almoço", "Devo 200 a mainha" ou
-                  "João já pagou"
+                  Exemplos: &quot;João me deve 80 do almoço&quot;,
+                  &quot;Devo 200 a mainha&quot; ou &quot;João já pagou&quot;
                 </Text>
 
                 <ScrollView
@@ -865,9 +860,9 @@ export default function DebtsScreen() {
                         { color: colors.textMuted },
                       ]}
                     >
-                      • "João me deve 80 do almoço"{'\n'}
-                      • "Paguei Maria"{'\n'}
-                      • "Devo 120 a Pedro do ingresso"
+                      • &quot;João me deve 80 do almoço&quot;{'\n'}
+                      • &quot;Paguei Maria&quot;{'\n'}
+                      • &quot;Devo 120 a Pedro do ingresso&quot;
                     </Text>
                   </View>
 

@@ -1,3 +1,8 @@
+import {
+  MONETARY_AMOUNT_PATTERN,
+  parseMonetaryAmount,
+} from '../utils/parseMonetaryAmount';
+
 type ParsedDebtMessage = {
   personName: string;
   type: 'to_receive' | 'to_pay';
@@ -15,16 +20,7 @@ function normalizeText(value: string) {
 }
 
 function extractAmount(raw: string): number | null {
-  const candidates = raw.match(/\d+(?:[.,]\d{1,2})?/g);
-
-  if (!candidates?.length) return null;
-
-  const first = candidates[0].replace(',', '.');
-  const amount = Number(first);
-
-  if (Number.isNaN(amount) || amount <= 0) return null;
-
-  return amount;
+  return parseMonetaryAmount(raw);
 }
 
 function cleanupPersonName(value: string) {
@@ -137,12 +133,30 @@ class ParseDebtMessageService {
     if (!amount) return null;
 
     const receivePatterns: RegExp[] = [
-      /^(.+?)\s+me\s+deve\s+\d+(?:[.,]\d{1,2})?\s*(.*)$/i,
-      /^(.+?)\s+esta\s+me\s+devendo\s+\d+(?:[.,]\d{1,2})?\s*(.*)$/i,
-      /^(.+?)\s+está\s+me\s+devendo\s+\d+(?:[.,]\d{1,2})?\s*(.*)$/i,
-      /^(.+?)\s+ta\s+me\s+devendo\s+\d+(?:[.,]\d{1,2})?\s*(.*)$/i,
-      /^(.+?)\s+t[aá]\s+me\s+devendo\s+\d+(?:[.,]\d{1,2})?\s*(.*)$/i,
-      /^(.+?)\s+ficou\s+me\s+devendo\s+\d+(?:[.,]\d{1,2})?\s*(.*)$/i,
+      new RegExp(
+        String.raw`^(.+?)\s+me\s+deve\s+${MONETARY_AMOUNT_PATTERN}\s*(.*)$`,
+        'i'
+      ),
+      new RegExp(
+        String.raw`^(.+?)\s+esta\s+me\s+devendo\s+${MONETARY_AMOUNT_PATTERN}\s*(.*)$`,
+        'i'
+      ),
+      new RegExp(
+        String.raw`^(.+?)\s+está\s+me\s+devendo\s+${MONETARY_AMOUNT_PATTERN}\s*(.*)$`,
+        'i'
+      ),
+      new RegExp(
+        String.raw`^(.+?)\s+ta\s+me\s+devendo\s+${MONETARY_AMOUNT_PATTERN}\s*(.*)$`,
+        'i'
+      ),
+      new RegExp(
+        String.raw`^(.+?)\s+t[aá]\s+me\s+devendo\s+${MONETARY_AMOUNT_PATTERN}\s*(.*)$`,
+        'i'
+      ),
+      new RegExp(
+        String.raw`^(.+?)\s+ficou\s+me\s+devendo\s+${MONETARY_AMOUNT_PATTERN}\s*(.*)$`,
+        'i'
+      ),
     ];
 
     for (const regex of receivePatterns) {
@@ -164,12 +178,30 @@ class ParseDebtMessageService {
     }
 
     const payPatterns: RegExp[] = [
-      /^devo\s+\d+(?:[.,]\d{1,2})?\s+(?:a|ao|para|pra|pro)\s+(.+)$/i,
-      /^estou\s+devendo\s+\d+(?:[.,]\d{1,2})?\s+(?:a|ao|para|pra|pro)\s+(.+)$/i,
-      /^fiquei\s+devendo\s+\d+(?:[.,]\d{1,2})?\s+(?:a|ao|para|pra|pro)\s+(.+)$/i,
-      /^preciso\s+pagar\s+\d+(?:[.,]\d{1,2})?\s+(?:a|ao|para|pra|pro)\s+(.+)$/i,
-      /^tenho\s+que\s+pagar\s+\d+(?:[.,]\d{1,2})?\s+(?:a|ao|para|pra|pro)\s+(.+)$/i,
-      /^vou\s+pagar\s+\d+(?:[.,]\d{1,2})?\s+(?:a|ao|para|pra|pro)\s+(.+)$/i,
+      new RegExp(
+        String.raw`^devo\s+${MONETARY_AMOUNT_PATTERN}\s+(?:a|ao|para|pra|pro)\s+(.+)$`,
+        'i'
+      ),
+      new RegExp(
+        String.raw`^estou\s+devendo\s+${MONETARY_AMOUNT_PATTERN}\s+(?:a|ao|para|pra|pro)\s+(.+)$`,
+        'i'
+      ),
+      new RegExp(
+        String.raw`^fiquei\s+devendo\s+${MONETARY_AMOUNT_PATTERN}\s+(?:a|ao|para|pra|pro)\s+(.+)$`,
+        'i'
+      ),
+      new RegExp(
+        String.raw`^preciso\s+pagar\s+${MONETARY_AMOUNT_PATTERN}\s+(?:a|ao|para|pra|pro)\s+(.+)$`,
+        'i'
+      ),
+      new RegExp(
+        String.raw`^tenho\s+que\s+pagar\s+${MONETARY_AMOUNT_PATTERN}\s+(?:a|ao|para|pra|pro)\s+(.+)$`,
+        'i'
+      ),
+      new RegExp(
+        String.raw`^vou\s+pagar\s+${MONETARY_AMOUNT_PATTERN}\s+(?:a|ao|para|pra|pro)\s+(.+)$`,
+        'i'
+      ),
     ];
 
     for (const regex of payPatterns) {
@@ -198,7 +230,12 @@ class ParseDebtMessageService {
 
         if (!personName) return null;
 
-        const descMatch = after.match(/^\d+(?:[.,]\d{1,2})?\s*(.*)$/i);
+        const descMatch = after.match(
+          new RegExp(
+            String.raw`^${MONETARY_AMOUNT_PATTERN}\s*(.*)$`,
+            'i'
+          )
+        );
         const description = extractTrailingDescription(descMatch?.[1]);
 
         return {
