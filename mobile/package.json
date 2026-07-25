@@ -5,6 +5,8 @@
   "scripts": {
     "start": "expo start",
     "start:dev": "cross-env APP_ENV=dev expo start",
+    "configure:lan": "node scripts/configure-lan.cjs",
+    "start:lan": "npm run configure:lan && cross-env APP_ENV=dev expo start --clear",
     "start:beta": "cross-env APP_ENV=beta expo start",
     "start:prod": "cross-env APP_ENV=prod expo start",
     "android": "expo run:android",

@@ -48,12 +48,25 @@ ser preenchidos em conjunto.
    npm install
    ```
 
-2. Para um aparelho físico, troque `localhost` pelo IP da máquina na rede:
+2. Para usar o Expo Go em um aparelho físico, mantenha o computador e o
+   celular na mesma rede e use o comando que detecta o IPv4 local, atualiza o
+   `.env` e limpa o cache do Metro:
+
+   ```bash
+   npm run start:lan
+   ```
+
+   Esse comando evita que o aplicativo use `localhost`, que no Expo Go aponta
+   para o próprio celular. Se precisar configurar o endereço manualmente, use:
 
    ```dotenv
    APP_ENV=dev
    EXPO_PUBLIC_API_URL=http://192.168.1.100:3333
    ```
+
+   Também é possível forçar a detecção com
+   `EXPO_LAN_IP=192.168.1.100 npm run start:lan` (no PowerShell, defina
+   `$env:EXPO_LAN_IP` antes do comando).
 
    No emulador Android, normalmente a máquina host é `10.0.2.2`. No iOS
    Simulator, `localhost` normalmente funciona.
@@ -64,6 +77,10 @@ ser preenchidos em conjunto.
    npm run start:dev
    npm run start:beta
    ```
+
+Se o aparelho ainda não alcançar a API, confirme que o backend está rodando na
+porta `3333` e que o firewall permite conexões de entrada do Node.js na rede
+privada.
 
 Para produção, defina uma URL HTTPS:
 
